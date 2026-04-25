@@ -1,24 +1,30 @@
 ENTRY(_start)
 
+PHDRS {
+    text PT_LOAD FLAGS(5);   /* R + X */
+    data PT_LOAD FLAGS(6);   /* R + W */
+}
+
 SECTIONS {
     . = 1M;
-    .multiboot2 : {
-        . = ALIGN(0);
-        *(.multiboot2)
-   }
+
+    .multiboot2 : ALIGN(8) {
+        KEEP(*(.multiboot2))
+    } :text
+
     .text : {
         *(.text*)
-    }
+    } :text
 
     .rodata : {
         *(.rodata*)
-    }
+    } :text
 
     .data : {
         *(.data*)
-    }
+    } :data
 
     .bss : {
         *(.bss*)
-    }
+    } :data
 }
