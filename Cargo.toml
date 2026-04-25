@@ -6,6 +6,9 @@ edition = "2024"
 panic = "abort"
 [profile.release]
 panic = "abort"
-[lib]
+[[bin]]
+name = "runix"
+path = "src/main.rs"
 test = false
+bench = false
 [dependencies]
