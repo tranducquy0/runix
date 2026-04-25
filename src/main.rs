@@ -1,15 +1,13 @@
 #![no_main]
 #![no_std]
 use core::panic::PanicInfo;
-
+use core::ptr::write_volatile;
 #[unsafe(no_mangle)]
 pub extern  "C" fn _start() -> ! {
-    let vga = 0xb8000 as *mut u8;
+    let vga = 0xb8000 as *mut (u8, u8);
     unsafe {
-        *vga.offset(0) = b'O';
-        *vga.offset(1) = 0x0f;
-        *vga.offset(2) = b'K';
-        *vga.offset(3) = 0x0f;
+        write_volatile(vga.add(1), (b'O', 0x0f));
+        write_volatile(vga.add(1), (b'K', 0x0f));
         };
     loop {};
 }
