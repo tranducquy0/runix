@@ -18,4 +18,7 @@ SECTIONS {
     .bss : {
         *(.bss*)
     }
+    .multiboot2 : {
+    *(.multiboot2)
+   }
 }
