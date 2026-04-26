@@ -1,12 +1,17 @@
+// disable normal features that can't build a kernel
 #![no_main]
 #![no_std]
-use core::panic::PanicInfo;
-use core::ptr::write_volatile;
+
+// driver and handler module
 mod drivers;
+mod handlers;
+
+// stack implementation
 #[repr(align(16))]
 struct Stack([u8; 4096]);
 static mut STACK: Stack = Stack([0; 4096]);
 
+// entry point
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     unsafe {
@@ -23,19 +28,17 @@ pub extern "C" fn _start() -> ! {
     }
     loop {}
 }
-// simple panic handler
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-  loop {}
-}
-// multiboot2 header
+
+// multiboot2 header checksum
 const CHECKSUM:u32 = (0u32).wrapping_sub(0xE85250D6u32 + 0 + 24);
 
+// multboot2 header struct
 #[repr(C, align(8))]
 struct MultibootHeader {
     data: [u32; 6],
 }
 
+// multiboot2 header (for real this time)
 #[unsafe(link_section = ".multiboot2")]
 #[used]
 #[unsafe(no_mangle)]

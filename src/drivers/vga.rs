@@ -1,10 +1,13 @@
+// vga data struct
 struct VGAChar {
     ascii: u8,
     color: u8,
 }
 
+// buffer address
 const VGA_BUFFER: *mut VGAChar = 0xb8000 as *mut VGAChar;
 
+// write each byte to buffer
 pub fn write_byte(offset: usize, byte: u8) {
     unsafe {
         core::ptr::write_volatile(
@@ -13,6 +16,8 @@ pub fn write_byte(offset: usize, byte: u8) {
         );
     }
 }
+
+// print a string
 pub fn vga_print(s: &str) {
     let bytes = s.as_bytes();
     for (idx, &b) in bytes.iter().enumerate() {

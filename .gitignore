@@ -1,3 +1,4 @@
 /target
-/iso
+/iso/boot/rkrnl
+/iso/boot/kernel.bin
 /*.iso
