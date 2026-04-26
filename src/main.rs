@@ -2,7 +2,7 @@
 #![no_std]
 use core::panic::PanicInfo;
 use core::ptr::write_volatile;
-
+mod drivers;
 #[repr(align(16))]
 struct Stack([u8; 4096]);
 static mut STACK: Stack = Stack([0; 4096]);
@@ -18,22 +18,15 @@ pub extern "C" fn _start() -> ! {
             in(reg) stack_top
         );
     }
-    #[repr(C)]
-    struct VGAChar {
-        _char: u8,
-        color: u8
-    }
-    let vga = 0xb8000 as *mut VGAChar;
     unsafe {
-        core::ptr::write_volatile(vga.add(0), VGAChar { _char: b'O', color: 0x0f});
-        core::ptr::write_volatile(vga.add(1), VGAChar { _char: b'K', color: 0x0f });
+        drivers::vga::vga_print("OK");
     }
     loop {}
 }
 // simple panic handler
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    loop {}
+  loop {}
 }
 // multiboot2 header
 const CHECKSUM:u32 = (0u32).wrapping_sub(0xE85250D6u32 + 0 + 24);

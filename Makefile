@@ -6,6 +6,8 @@ build:
 	-Z build-std=core \
 	-Z build-std-features=compiler-builtins-mem \
 	-Z json-target-spec
+	@echo "[*] done!"
+build_iso:
 	@echo "[*] crafting ISO..."
 	@echo "	[*] getting built kernel for packing..."
 	@cp target/$(TGT)/debug/runix iso/boot/kernel.bin -f
