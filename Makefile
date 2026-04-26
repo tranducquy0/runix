@@ -1,17 +1,22 @@
+TGT=i686-runix-target
+QEMU_TGT=i386
 build:
 	@echo "[*] building..."
-	@cargo build
+	@cargo +nightly build \
+	-Z build-std=core \
+	-Z build-std-features=compiler-builtins-mem \
+	-Z json-target-spec
 	@echo "[*] crafting ISO..."
 	@echo "	[*] getting built kernel for packing..."
-	@cp target/x86_64-unknown-none/debug/runix iso/boot/kernel.bin -f
+	@cp target/$(TGT)/debug/runix iso/boot/kernel.bin -f
 	@echo "	[*] building ISO using grub-mkrescue..."
 	@grub-mkrescue -o runix.iso iso
 run:
 	@echo "[*] starting QEMU with built ISO..."
-	@qemu-system-i386 -cdrom runix.iso
+	@qemu-system-$(QEMU_TGT) -cdrom runix.iso
 clean:
 	@echo "[*] cleaning..."
 	@echo "	[*] cargo"
 	@cargo clean
 	@echo "	[*] ISO"
-	@rm runix.iso iso/boot/kernel.bin
+	@rm runix.iso iso/boot/kernel.bin -f
