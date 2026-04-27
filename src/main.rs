@@ -3,7 +3,9 @@
 #![no_std]
 
 // driver and handler module
+#[macro_use]
 mod drivers;
+
 mod handlers;
 
 // stack implementation
@@ -24,7 +26,7 @@ pub extern "C" fn _start() -> ! {
         );
     }
     unsafe {
-        drivers::vga::vga_print("OK");
+        println!("OK");
     }
     loop {}
 }
