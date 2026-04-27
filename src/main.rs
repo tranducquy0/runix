@@ -3,10 +3,12 @@
 #![no_std]
 
 // driver and handler module
-#[macro_use]
+#[macro_use] // use the macros from vga module (KEEP IT AS IS, don't ask why!)
 mod drivers;
 
 mod handlers;
+// memory manager
+mod memory;
 
 // stack implementation
 #[repr(align(16))]
@@ -26,7 +28,7 @@ pub extern "C" fn _start() -> ! {
         );
     }
     unsafe {
-        println!("OK");
+        println!("Welcome to the R-Unix Kernel!")
     }
     loop {}
 }
