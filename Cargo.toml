@@ -12,3 +12,4 @@ path = "src/main.rs"
 test = false
 bench = false
 [dependencies]
+spin = "*"
