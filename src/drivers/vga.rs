@@ -1,18 +1,19 @@
 use core::fmt;
-use spin::Mutex;
-
+use spin::Mutex; // for avoiding some weird cases like multi mutable instances
+// buffer width and size
 const BUFFER_WIDTH: usize = 80;
 const BUFFER_HEIGHT: usize = 25;
 
+// writer struct
 pub struct Writer {
-    buffer: *mut u8,
-    row: usize,
-    column: usize,
-    color: u8,
+    buffer: *mut u8, // 0xb8000 - the OG VGA addr
+    row: usize, // keeping track of the current row
+    column: usize, // (like above, but column)
+    color: u8, // color (format: 0x{bg}{fg}, eg. 0x0f (white text on black))
 }
 
 impl Writer {
-    pub const fn new() -> Self {
+    pub const fn new() -> Self { // new instance of writer struct
         Self {
             buffer: 0xb8000 as *mut u8,
             row: 0,
@@ -21,10 +22,11 @@ impl Writer {
         }
     }
 
-    fn write_byte(&mut self, byte: u8) {
+    fn write_byte(&mut self, byte: u8) { // receive a byte (type: u8), check it, then write it to VGA memory
         match byte {
             b'\n' => self.newline(),
             byte => {
+                // overflow checks
                 if self.column >= BUFFER_WIDTH {
                     self.newline();
                 }
@@ -33,6 +35,7 @@ impl Writer {
                     self.scroll();
                 }
 
+                // get index of cursor
                 let idx = (self.row * BUFFER_WIDTH + self.column) * 2;
 
                 unsafe {
@@ -60,7 +63,6 @@ impl Writer {
             for col in 0..BUFFER_WIDTH {
                 let from = (row * BUFFER_WIDTH + col) * 2;
                 let to = ((row - 1) * BUFFER_WIDTH + col) * 2;
-
                 unsafe {
                     let ch = *self.buffer.add(from);
                     let color = *self.buffer.add(from + 1);
@@ -77,7 +79,7 @@ impl Writer {
         self.column = 0;
     }
 
-    fn clear_row(&mut self, row: usize) {
+    fn clear_row(&mut self, row: usize) { // "clear" a row (fill it with spaces)
         for col in 0..BUFFER_WIDTH {
             let idx = (row * BUFFER_WIDTH + col) * 2;
 
@@ -88,6 +90,13 @@ impl Writer {
         }
     }
 
+    /**
+    write a string 
+    input: a string
+    processing pipeline: loop through the string's bytes 
+    (type u8) and write it to the VGA, prints 0xfe (a square)
+    if detecting any weird character
+    */
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
@@ -98,9 +107,11 @@ impl Writer {
     }
 }
 
+// stub code (to use Mutex), DON'T TOUCH
 unsafe impl Send for Writer {}
 unsafe impl Sync for Writer {}
 
+// implement fmt::Write
 impl fmt::Write for Writer {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.write_string(s);
@@ -108,8 +119,10 @@ impl fmt::Write for Writer {
     }
 }
 
+// create WRITER Mutex instance
 pub static WRITER: Mutex<Writer> = Mutex::new(Writer::new());
 
+// export both print! and println! macros
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ({

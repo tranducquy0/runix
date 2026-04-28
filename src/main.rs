@@ -9,6 +9,8 @@ mod drivers;
 mod handlers;
 // memory manager
 mod memory;
+use memory::memory::FrameAllocator;
+
 
 // stack implementation
 #[repr(align(16))]
@@ -18,18 +20,21 @@ static mut STACK: Stack = Stack([0; 4096]);
 // entry point
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
-    unsafe {
-        let stack_top =
-            ((core::ptr::addr_of!(STACK) as usize) + 4096) & !0xF;
+    println!("OK");
+    let mut malloc = FrameAllocator::new(0x100000, 0x200000);
+    for i in 0..3 {
+        println!("alloc#{}", i);
 
-        core::arch::asm!(
-            "mov esp, {}",
-            in(reg) stack_top
-        );
+        if let Some(frame) = malloc.alloc() {
+            println!("frame#{:#x} recorded", frame);
+        } else {
+            println!("nothing recorded");
+        }
     }
-    unsafe {
-        println!("Welcome to the R-Unix Kernel!")
-    }
+
+
+
+
     loop {}
 }
 
@@ -51,7 +56,7 @@ static MULTIBOOT2_HEADER: MultibootHeader = MultibootHeader {
         0xE85250D6, // magic
         0,          // architecture
         24,         // length
-        (0u32).wrapping_sub(0xE85250D6 + 0 + 24),
+        CHECKSUM,
         0,          // end tag type
         8,          // end tag size
     ],
