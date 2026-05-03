@@ -91,11 +91,9 @@ impl Writer {
     }
 
     /**
-    write a string 
-    input: a string
-    processing pipeline: loop through the string's bytes 
-    (type u8) and write it to the VGA, prints 0xfe (a square)
-    if detecting any weird character
+     * write a string to the vga
+     * work fine for ASCII characters (0x20..0x7e)
+     * print a square for non-ASCII characters
     */
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
