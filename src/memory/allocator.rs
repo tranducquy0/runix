@@ -14,7 +14,7 @@ impl FrameAllocator {
     }
 
     pub fn alloc(&mut self) -> Option<usize> {
-           if self.curr + FRAME_SIZE > self.end {
+           if self.curr >= self.end {
             None
         } else {
             let frame = self.curr;

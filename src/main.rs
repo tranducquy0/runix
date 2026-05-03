@@ -9,7 +9,7 @@ mod drivers;
 mod handlers;
 // memory manager
 mod memory;
-use memory::memory::FrameAllocator;
+use memory::allocator::FrameAllocator;
 
 
 // stack implementation
