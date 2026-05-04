@@ -2,6 +2,9 @@
 #![no_main]
 #![no_std]
 
+use core::arch::global_asm;
+
+mod boot;
 // driver and handler module
 #[macro_use] // use the macros from vga module (KEEP IT AS IS, don't ask why!)
 mod drivers;
@@ -9,42 +12,70 @@ mod drivers;
 mod handlers;
 // memory manager
 mod memory;
-use memory::allocator::FrameAllocator;
+use boot::multiboot2::{self, BootInformation};
 
+global_asm!(
+    r#"
+    .section .bss
+    .align 16
+boot_stack:
+    .skip 4096
+boot_stack_top:
 
-// stack implementation
-#[repr(align(16))]
-struct Stack([u8; 4096]);
-static mut STACK: Stack = Stack([0; 4096]);
+    .section .text
+    .global _start
+_start:
+    mov esp, offset boot_stack_top
+    push ebx
+    push eax
+    call kernel_main
+1:
+    hlt
+    jmp 1b
+"#
+);
 
-// entry point
 #[unsafe(no_mangle)]
-pub extern "C" fn _start() -> ! {
-    println!("OK");
-    let mut malloc = FrameAllocator::new(0x100000, 0x200000);
-    for i in 0..3 {
-        println!("alloc#{}", i);
+extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
+    println!("Welcome to the R-Unix kernel");
 
-        if let Some(frame) = malloc.alloc() {
-            println!("frame#{:#x} recorded", frame);
-        } else {
-            println!("nothing recorded");
-        }
+    if multiboot_magic != multiboot2::BOOTLOADER_MAGIC {
+        println!("invalid multiboot2 magic: {:#x}", multiboot_magic);
+        loop {}
     }
 
+    let grub_boot_info = unsafe { BootInformation::load(multiboot_info_addr as usize) };
+    let Some(mem_map_tag) = grub_boot_info.memory_map_tag() else {
+        println!("GRUB did not provide a memory map tag");
+        loop {}
+    };
 
-
-
+    for region in mem_map_tag.memory_areas() {
+        if region.is_available() {
+            println!(
+                "usable: start = {:#x}, len = {:#x}",
+                region.start_address(),
+                region.size()
+            );
+        }
+    }
     loop {}
 }
 
 // multiboot2 header checksum
-const CHECKSUM:u32 = (0u32).wrapping_sub(0xE85250D6u32 + 0 + 24);
+const MULTIBOOT2_HEADER_MAGIC: u32 = 0xE85250D6;
+const MULTIBOOT2_ARCHITECTURE_I386: u32 = 0;
+const MULTIBOOT2_HEADER_LENGTH: u32 = 40;
+const MULTIBOOT2_MEMORY_MAP_TAG: u32 = 6;
+const CHECKSUM: u32 = (0u32).wrapping_sub(
+    MULTIBOOT2_HEADER_MAGIC + MULTIBOOT2_ARCHITECTURE_I386 + MULTIBOOT2_HEADER_LENGTH,
+);
+
 
 // multboot2 header struct
 #[repr(C, align(8))]
 struct MultibootHeader {
-    data: [u32; 6],
+    data: [u32; 10],
 }
 
 // multiboot2 header (for real this time)
@@ -53,11 +84,15 @@ struct MultibootHeader {
 #[unsafe(no_mangle)]
 static MULTIBOOT2_HEADER: MultibootHeader = MultibootHeader {
     data: [
-        0xE85250D6, // magic
-        0,          // architecture
-        24,         // length
+        MULTIBOOT2_HEADER_MAGIC,
+        MULTIBOOT2_ARCHITECTURE_I386,
+        MULTIBOOT2_HEADER_LENGTH,
         CHECKSUM,
-        0,          // end tag type
-        8,          // end tag size
+        1, // information request tag type
+        0, // required
+        16,
+        MULTIBOOT2_MEMORY_MAP_TAG,
+        0, // end tag type
+        8, // end tag size
     ],
 };
