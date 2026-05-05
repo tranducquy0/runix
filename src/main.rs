@@ -15,11 +15,15 @@ mod memory;
 use boot::multiboot2::{self, BootInformation};
 use memory::{allocator::FrameAllocator, BootMemoryMap, ReservedRange};
 
+// Keep the boot stub in assembly so the exact register/stack handoff from GRUB
+// stays explicit and easy to compare against the Multiboot2 spec.
 global_asm!(
     include_str!("asm/boot.asm")
 );
 
 unsafe extern "C" {
+    // These linker / assembly symbols describe physical memory ranges that are
+    // already occupied before the allocator starts handing out frames.
     static __kernel_start: u8;
     static __kernel_end: u8;
     static boot_stack: u8;
@@ -35,12 +39,15 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
         loop {}
     }
 
+    // `multiboot_info_addr` comes directly from GRUB via `ebx`.
     let grub_boot_info = unsafe { BootInformation::load(multiboot_info_addr as usize) };
     let Some(mem_map_tag) = grub_boot_info.memory_map_tag() else {
         println!("GRUB did not provide a memory map tag");
         loop {}
     };
 
+    // Copy the bootloader's raw memory description into a small kernel-owned
+    // structure before we start carving reserved ranges out of it.
     let Some(mut memory_map) = BootMemoryMap::from_multiboot(mem_map_tag.memory_areas()) else {
         println!("memory map did not fit in the kernel boot map");
         loop {}
@@ -80,6 +87,8 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
         );
     }
 
+    // This is still a smoke test for the allocator. It proves the filtered boot
+    // memory map can already produce sane page-sized frames.
     let mut allocator = FrameAllocator::new(&memory_map);
     println!("first few allocatable frames:");
     for _ in 0..4 {
@@ -106,6 +115,8 @@ const CHECKSUM: u32 = (0u32).wrapping_sub(
 
 #[repr(C, align(8))]
 struct MultibootHeader {
+    // Raw bytes avoid Rust layout surprises in a format where GRUB expects
+    // exact offsets and exact alignment.
     data: [u8; MULTIBOOT2_HEADER_LENGTH as usize],
 }
 
@@ -114,6 +125,8 @@ struct MultibootHeader {
 #[unsafe(no_mangle)]
 static MULTIBOOT2_HEADER: MultibootHeader = MultibootHeader {
     data: [
+        // Standard Multiboot2 header prologue: magic, architecture, size,
+        // then a checksum that makes the 32-bit sum of these fields equal zero.
         0xd6, 0x50, 0x52, 0xe8, // magic
         0x00, 0x00, 0x00, 0x00, // architecture
         0x28, 0x00, 0x00, 0x00, // header length = 40
@@ -121,10 +134,12 @@ static MULTIBOOT2_HEADER: MultibootHeader = MultibootHeader {
         ((CHECKSUM >> 8) & 0xff) as u8,
         ((CHECKSUM >> 16) & 0xff) as u8,
         ((CHECKSUM >> 24) & 0xff) as u8,
+        // Request that GRUB include the memory map boot info tag.
         0x01, 0x00, 0x00, 0x00, // information request tag type + flags
         0x0c, 0x00, 0x00, 0x00, // information request tag size = 12
         0x06, 0x00, 0x00, 0x00, // request memory map tag
         0x00, 0x00, 0x00, 0x00, // 8-byte alignment padding
+        // Required terminating tag for Multiboot2 header parsing.
         0x00, 0x00, 0x00, 0x00, // end tag type + flags
         0x08, 0x00, 0x00, 0x00, // end tag size = 8
     ],

@@ -1,8 +1,8 @@
-use super::{BootMemoryMap, MAX_MEMORY_REGIONS, MemoryRegion};
-
-const FRAME_SIZE: usize = 4096;
+use super::{BootMemoryMap, FRAME_SIZE, MAX_MEMORY_REGIONS, MemoryRegion};
 
 pub struct FrameAllocator {
+    // The allocator keeps its own cursor state so the original boot memory map
+    // can still be inspected or reused later during initialization.
     regions: [MemoryRegion; MAX_MEMORY_REGIONS],
     region_count: usize,
     current_region: usize,
@@ -24,6 +24,7 @@ impl FrameAllocator {
             regions,
             region_count: source.len(),
             current_region: 0,
+            // Zero means "not started in the current region yet".
             next_frame: 0,
         }
     }
@@ -34,30 +35,25 @@ impl FrameAllocator {
         while self.current_region < self.region_count {
             let region = self.regions[self.current_region];
             let next = if self.next_frame == 0 {
-                Self::align_up(region.start())
+                region.start()
             } else {
                 self.next_frame
             };
 
-            let end = Self::align_down(region.end());
+            let end = region.end();
             if next >= end {
+                // This region is exhausted, so advance to the next usable one.
                 self.current_region += 1;
                 self.next_frame = 0;
                 continue;
             }
 
+            // `BootMemoryMap` already aligned region edges to page boundaries, so
+            // we only need to step one frame forward after each allocation.
             self.next_frame = next + FRAME_SIZE;
             return Some(next);
         }
 
         None
-    }
-
-    const fn align_up(addr: usize) -> usize {
-        (addr + FRAME_SIZE - 1) & !(FRAME_SIZE - 1)
-    }
-
-    const fn align_down(addr: usize) -> usize {
-        addr & !(FRAME_SIZE - 1)
     }
 }
