@@ -61,6 +61,14 @@ impl BootInformation {
         }
     }
 
+    pub fn start_address(&self) -> usize {
+        self.start
+    }
+
+    pub fn end_address(&self) -> usize {
+        self.end
+    }
+
     pub fn memory_map_tag(&self) -> Option<MemoryMapTag<'_>> {
         let mut offset = self.start + mem::size_of::<BootInformationHeader>();
 

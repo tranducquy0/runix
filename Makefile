@@ -23,3 +23,7 @@ clean:
 	@cargo clean
 	@echo "	[*] ISO"
 	@rm runix.iso iso/boot/$(KERNEL_NAME) -f
+
+test:
+	@echo "[*] testing kernel image"
+	@bash tests/kernel_image.sh

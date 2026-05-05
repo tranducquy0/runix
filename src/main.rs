@@ -13,27 +13,18 @@ mod handlers;
 // memory manager
 mod memory;
 use boot::multiboot2::{self, BootInformation};
+use memory::{allocator::FrameAllocator, BootMemoryMap, ReservedRange};
 
 global_asm!(
-    r#"
-    .section .bss
-    .align 16
-boot_stack:
-    .skip 4096
-boot_stack_top:
-
-    .section .text
-    .global _start
-_start:
-    mov esp, offset boot_stack_top
-    push ebx
-    push eax
-    call kernel_main
-1:
-    hlt
-    jmp 1b
-"#
+    include_str!("asm/boot.asm")
 );
+
+unsafe extern "C" {
+    static __kernel_start: u8;
+    static __kernel_end: u8;
+    static boot_stack: u8;
+    static boot_stack_top: u8;
+}
 
 #[unsafe(no_mangle)]
 extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
@@ -50,15 +41,57 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
         loop {}
     };
 
-    for region in mem_map_tag.memory_areas() {
-        if region.is_available() {
-            println!(
-                "usable: start = {:#x}, len = {:#x}",
-                region.start_address(),
-                region.size()
-            );
+    let Some(mut memory_map) = BootMemoryMap::from_multiboot(mem_map_tag.memory_areas()) else {
+        println!("memory map did not fit in the kernel boot map");
+        loop {}
+    };
+
+    // These ranges are occupied before the allocator ever runs, so we cut them
+    // out of the GRUB memory map first. That keeps later allocation logic from
+    // accidentally handing out frames that belong to the kernel or bootloader.
+    let reserved_ranges = [
+        ReservedRange::new(
+            core::ptr::addr_of!(__kernel_start) as usize,
+            core::ptr::addr_of!(__kernel_end) as usize,
+        ),
+        ReservedRange::new(
+            grub_boot_info.start_address(),
+            grub_boot_info.end_address(),
+        ),
+        ReservedRange::new(
+            core::ptr::addr_of!(boot_stack) as usize,
+            core::ptr::addr_of!(boot_stack_top) as usize,
+        ),
+    ];
+
+    for reserved in reserved_ranges {
+        if !memory_map.reserve(reserved) {
+            println!("reserved range split the boot map too many times");
+            loop {}
         }
     }
+
+    println!("usable memory after reservations:");
+    for region in memory_map.regions() {
+        println!(
+            "usable: start = {:#x}, len = {:#x}",
+            region.start(),
+            region.size()
+        );
+    }
+
+    let mut allocator = FrameAllocator::new(&memory_map);
+    println!("first few allocatable frames:");
+    for _ in 0..4 {
+        match allocator.alloc() {
+            Some(frame) => println!("frame = {:#x}", frame),
+            None => {
+                println!("no more frames");
+                break;
+            }
+        }
+    }
+
     loop {}
 }
 
@@ -66,33 +99,33 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
 const MULTIBOOT2_HEADER_MAGIC: u32 = 0xE85250D6;
 const MULTIBOOT2_ARCHITECTURE_I386: u32 = 0;
 const MULTIBOOT2_HEADER_LENGTH: u32 = 40;
-const MULTIBOOT2_MEMORY_MAP_TAG: u32 = 6;
 const CHECKSUM: u32 = (0u32).wrapping_sub(
     MULTIBOOT2_HEADER_MAGIC + MULTIBOOT2_ARCHITECTURE_I386 + MULTIBOOT2_HEADER_LENGTH,
 );
 
 
-// multboot2 header struct
 #[repr(C, align(8))]
 struct MultibootHeader {
-    data: [u32; 10],
+    data: [u8; MULTIBOOT2_HEADER_LENGTH as usize],
 }
 
-// multiboot2 header (for real this time)
 #[unsafe(link_section = ".multiboot2")]
 #[used]
 #[unsafe(no_mangle)]
 static MULTIBOOT2_HEADER: MultibootHeader = MultibootHeader {
     data: [
-        MULTIBOOT2_HEADER_MAGIC,
-        MULTIBOOT2_ARCHITECTURE_I386,
-        MULTIBOOT2_HEADER_LENGTH,
-        CHECKSUM,
-        1, // information request tag type
-        0, // required
-        16,
-        MULTIBOOT2_MEMORY_MAP_TAG,
-        0, // end tag type
-        8, // end tag size
+        0xd6, 0x50, 0x52, 0xe8, // magic
+        0x00, 0x00, 0x00, 0x00, // architecture
+        0x28, 0x00, 0x00, 0x00, // header length = 40
+        (CHECKSUM & 0xff) as u8,
+        ((CHECKSUM >> 8) & 0xff) as u8,
+        ((CHECKSUM >> 16) & 0xff) as u8,
+        ((CHECKSUM >> 24) & 0xff) as u8,
+        0x01, 0x00, 0x00, 0x00, // information request tag type + flags
+        0x0c, 0x00, 0x00, 0x00, // information request tag size = 12
+        0x06, 0x00, 0x00, 0x00, // request memory map tag
+        0x00, 0x00, 0x00, 0x00, // 8-byte alignment padding
+        0x00, 0x00, 0x00, 0x00, // end tag type + flags
+        0x08, 0x00, 0x00, 0x00, // end tag size = 8
     ],
 };
