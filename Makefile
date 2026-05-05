@@ -26,4 +26,4 @@ clean:
 
 test:
 	@echo "[*] testing kernel image"
-	@bash tests/kernel_image.sh
+	@bash scripts/kernel_image.sh

@@ -3,7 +3,7 @@ target = ".cargo/targets/i686-runix-target.json"
 
 [target.i686-runix-target]
 rustflags = [
-    "-C", "link-arg=-Tlinker.ld",
+    "-C", "link-arg=-Tscripts/linker.ld",
     "-C", "relocation-model=static",
     "-C", "link-arg=-nostdlib",
     "-C", "link-arg=-static",
