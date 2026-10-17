@@ -6,14 +6,14 @@ This document describes how `runix` is entered by GRUB and how early control rea
 
 `runix` currently boots through Multiboot2 via GRUB.
 
-The GRUB menu entry is defined in [iso/boot/grub/grub.cfg](/home/quy/Projects/runix/iso/boot/grub/grub.cfg):
+The GRUB menu entry is defined in [iso/boot/grub/grub.cfg](../iso/boot/grub/grub.cfg):
 
 ```cfg
 multiboot2 /boot/rkrnl
 boot
 ```
 
-The kernel image is an `elf32-i386` executable linked by [linker.ld](/home/quy/Projects/runix/linker.ld).
+The kernel image is an `elf32-i386` executable linked by [scripts/linker.ld](../scripts/linker.ld).
 
 ## Kernel Entry Contract
 
@@ -35,7 +35,7 @@ The kernel currently assumes:
 
 ## Multiboot2 Header
 
-The Multiboot2 header is emitted from [src/main.rs](/home/quy/Projects/runix/src/main.rs) into the `.multiboot2` section.
+The Multiboot2 header is emitted from [src/main.rs](../src/main.rs) into the `.multiboot2` section.
 
 The linker keeps that section near the start of the image:
 
@@ -53,7 +53,7 @@ This means GRUB is asked to include the physical memory map in the boot informat
 
 ## Early Assembly Stub
 
-The first instructions executed are defined with `global_asm!` in [src/main.rs](/home/quy/Projects/runix/src/main.rs).
+The first instructions executed live in [src/asm/boot.asm](../src/asm/boot.asm), included with `global_asm!` from [src/main.rs](../src/main.rs).
 
 The stub does three things:
 
@@ -94,13 +94,16 @@ Its current responsibilities are:
 2. verify `multiboot_magic == 0x36d76289`
 3. treat `multiboot_info_addr` as a Multiboot2 boot information pointer
 4. locate the memory map tag
-5. print each available memory region
+5. copy the `Available` areas into a fixed-capacity `BootMemoryMap`, frame-aligned to 4 KiB
+6. reserve the kernel image, the Multiboot2 boot information, and the boot stack
+7. print the remaining usable regions
+8. smoke-test the `FrameAllocator` by allocating a few frames
 
 If the magic is wrong, or the memory map tag is missing, the kernel prints an error and loops forever.
 
 ## Boot Information Parsing
 
-The local Multiboot2 parser lives in [src/boot/multiboot2.rs](/home/quy/Projects/runix/src/boot/multiboot2.rs).
+The local Multiboot2 parser lives in [src/subs/boot/multiboot2.rs](../src/subs/boot/multiboot2.rs).
 
 It exists because the external `multiboot2` crate path used earlier pulled in `alloc`, which is not available in this kernel build.
 
@@ -115,16 +118,15 @@ The parser currently treats memory area type `1` as usable RAM.
 
 ## Current Memory Map Usage
 
-Right now the memory map is only printed.
+The memory map now feeds real allocation policy:
 
-It is not yet used to:
+- only memory areas reported as `Available` are kept
+- regions are aligned to 4 KiB frame boundaries
+- kernel image, Multiboot2 boot information, and boot stack ranges are reserved
+  (splitting regions where needed) so the allocator never hands them out
+- the filtered regions seed the `FrameAllocator`, which hands out physical frames
 
-- exclude kernel-reserved physical ranges
-- exclude Multiboot2 info storage
-- build a physical memory manager
-- seed the frame allocator
-
-That means the memory map is available, but not yet integrated into real allocation policy.
+See [architecture.md](architecture.md) for the memory subsystem in more detail.
 
 ## Limitations
 
@@ -135,7 +137,6 @@ This boot path is intentionally minimal and still has several limitations:
 - no serial console fallback
 - no handoff from temporary boot stack to a long-lived kernel stack
 - no validation beyond the bootloader magic and presence of the memory map tag
-- no protection yet against allocating frames that overlap kernel or bootloader data
 
 ## Practical Checks
 
@@ -152,6 +153,5 @@ readelf -l target/i686-runix-target/debug/runix
 The next useful extensions to this document are:
 
 - describe the exact Multiboot2 memory map format consumed by the kernel
-- document reserved physical ranges that must never be handed to the allocator
 - define the transition from boot-time stack/setup into a real kernel initialization phase
 - document future paging and higher-half plans once they exist
