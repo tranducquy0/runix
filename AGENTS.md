@@ -21,7 +21,7 @@
 - Linker: `scripts/linker.ld`. ISO layout: `iso/boot/` + GRUB config under `iso/`.
 
 ## Skills
-Repo-local agent skills live in `.opencode/skills/` (`kernel-build`, `kernel-memory`, `kernel-multiboot2`, `kernel-vga-output`). Load one via the `skill` tool when working in that area; `kernel-build` covers toolchain gotchas (e.g. the `ld.lld` / `rust-lld` override).
+Repo-local agent skills live in `.opencode/skills/` (`kernel-build`, `kernel-memory`, `kernel-multiboot2`, `kernel-vga-output`, `commit`). Load one via the `skill` tool when working in that area; `kernel-build` covers toolchain gotchas (e.g. the `ld.lld` / `rust-lld` override) and `commit` codifies the Conventional Commits style used in this repo.
 
 ## Verification notes
 - After building, run `make test` before `make build_iso`/`make run` — it enforces the image is valid ELF and Multiboot2-compliant.
