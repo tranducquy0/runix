@@ -125,7 +125,7 @@ pub static WRITER: Mutex<Writer> = Mutex::new(Writer::new());
 macro_rules! print {
     ($($arg:tt)*) => ({
         use core::fmt::Write;
-        let mut writer = $crate::drivers::vga::WRITER.lock();
+        let mut writer = $crate::drivers::output::vga::WRITER.lock();
         write!(writer, $($arg)*).unwrap();
     });
 }

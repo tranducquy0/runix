@@ -1,6 +1,6 @@
 pub mod allocator;
 
-use crate::boot::multiboot2::MemoryArea;
+use crate::subs::boot::multiboot2::MemoryArea;
 
 pub const MAX_MEMORY_REGIONS: usize = 32;
 pub const FRAME_SIZE: usize = 4096;

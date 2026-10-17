@@ -4,16 +4,14 @@
 
 use core::arch::global_asm;
 
-mod boot;
 // driver and handler module
 #[macro_use] // use the macros from vga module (KEEP IT AS IS, don't ask why!)
 mod drivers;
 
-mod handlers;
-// memory manager
-mod memory;
-use boot::multiboot2::{self, BootInformation};
-use memory::{allocator::FrameAllocator, BootMemoryMap, ReservedRange};
+// core subsystems
+mod subs;
+use subs::boot::multiboot2::{self, BootInformation};
+use subs::mem::{allocator::FrameAllocator, BootMemoryMap, ReservedRange};
 
 // Keep the boot stub in assembly so the exact register/stack handoff from GRUB
 // stays explicit and easy to compare against the Multiboot2 spec.

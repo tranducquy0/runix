@@ -1,5 +1,5 @@
 use core::panic::PanicInfo;
-use crate::{drivers::vga, println};
+use crate::println;
 #[panic_handler]
 pub fn panic(info: &PanicInfo) -> ! {
     let msg = info.message();
