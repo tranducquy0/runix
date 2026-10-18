@@ -1,43 +1,46 @@
-# Boot Flow
+# Boot flow
 
-This document describes how `runix` is entered by GRUB and how early control reaches Rust code.
+How GRUB enters `runix`, and how control reaches Rust.
 
-## Current Boot Protocol
+## Protocol
 
-`runix` currently boots through Multiboot2 via GRUB.
-
-The GRUB menu entry is defined in [iso/boot/grub/grub.cfg](../iso/boot/grub/grub.cfg):
+`runix` boots through Multiboot2 via GRUB. The menu entry is defined in
+[iso/boot/grub/grub.cfg](../iso/boot/grub/grub.cfg):
 
 ```cfg
-multiboot2 /boot/rkrnl
-boot
+menuentry "R-Unix Alpha 0.0.1" {
+    set gfxpayload=text
+    multiboot2 /boot/rkrnl
+    boot
+}
 ```
 
-The kernel image is an `elf32-i386` executable linked by [scripts/linker.ld](../scripts/linker.ld).
+The kernel image is an `elf32-i386` executable linked by
+[scripts/linker.ld](../scripts/linker.ld) with `ENTRY(_start)`, loaded at 1 MiB.
 
-## Kernel Entry Contract
+## Entry contract
 
-The linker entry point is `_start`.
+The linker entry point is `_start`. At that point the bootloader provides:
 
-At `_start`, the bootloader is expected to provide:
+- `eax = 0x36d76289` — the Multiboot2 bootloader magic
+- `ebx` — physical address of the Multiboot2 boot information structure
 
-- `eax = 0x36d76289`
-  This is the Multiboot2 bootloader magic.
-- `ebx = physical address of the Multiboot2 boot information structure`
+The kernel assumes:
 
-The kernel currently assumes:
+- 32-bit x86 execution, CPU already in protected mode
+- paging either disabled or set up so the loaded kernel image is directly usable
+- VGA text memory available at `0xb8000`
+- interrupts not required during early boot
 
-- 32-bit x86 execution
-- the CPU is already in protected mode
-- paging is either disabled or set up in a way that still makes the loaded kernel image directly usable
-- VGA text memory is available at `0xb8000`
-- interrupts are not required during early boot
+## Multiboot2 header
 
-## Multiboot2 Header
+The header is emitted from [src/main.rs](../src/main.rs) into the `.multiboot2`
+section as raw bytes (magic `0xE85250D6`, architecture i386, length 40, checksum),
+followed by an information-request tag and the required end tag. Raw bytes keep the
+on-disk layout exactly what the spec demands, independent of Rust layout rules.
 
-The Multiboot2 header is emitted from [src/main.rs](../src/main.rs) into the `.multiboot2` section.
-
-The linker keeps that section near the start of the image:
+The linker keeps the section near the start of the image, inside the first 32 KiB GRUB
+scans:
 
 ```ld
 .multiboot2 : ALIGN(8) {
@@ -45,119 +48,81 @@ The linker keeps that section near the start of the image:
 }
 ```
 
-The current header requests one boot information tag:
+The single information request is for the memory map (`type = 6`), so GRUB includes the
+physical memory map in the boot information passed through `ebx`.
 
-- memory map tag (`type = 6`)
+## Assembly stub
 
-This means GRUB is asked to include the physical memory map in the boot information passed through `ebx`.
+The first executed instructions live in [src/asm/boot.asm](../src/asm/boot.asm),
+included with `global_asm!` from [src/main.rs](../src/main.rs). The stub:
 
-## Early Assembly Stub
-
-The first instructions executed live in [src/asm/boot.asm](../src/asm/boot.asm), included with `global_asm!` from [src/main.rs](../src/main.rs).
-
-The stub does three things:
-
-1. reserves a temporary 32 KiB boot stack in `.bss` (grew from 4 KiB: the
-   debug-build `kernel_main` frame plus `println!` formatting machinery
-   overflows 4 KiB and corrupts/overruns the boot stack before any panic
-   handler could report it)
+1. reserves a temporary 32 KiB boot stack in `.bss` — grown from 4 KiB, which
+   overflowed once `kernel_main` gained larger locals plus the `println!` formatting
+   machinery (frames corrupted adjacent data before the panic handler could report it)
 2. sets `esp` to the top of that stack
 3. forwards `eax` and `ebx` to Rust using the C calling convention
 
-Equivalent shape:
+Shape:
 
 ```asm
 _start:
     mov esp, offset boot_stack_top
-    push ebx
-    push eax
+    push ebx        # second argument
+    push eax        # first argument
     call kernel_main
 ```
 
-The push order matters. On 32-bit x86 C ABI, arguments are pushed right-to-left, so:
-
-- `push ebx` passes the second Rust parameter
-- `push eax` passes the first Rust parameter
-
-That matches:
+Push order matters: on 32-bit x86 C ABI arguments are pushed right-to-left, which
+matches:
 
 ```rust
 extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> !;
 ```
 
-If `kernel_main` ever returns, the stub halts in an infinite loop.
+If `kernel_main` ever returns, the stub halts in a `hlt` loop.
 
-## Rust Boot Handoff
+## Rust handoff
 
-`kernel_main` is the first Rust function in the boot path.
+`kernel_main` (first Rust function in the boot path):
 
-Its current responsibilities are:
+1. clears the VGA screen (otherwise GRUB's menu text bleeds into kernel output) and
+   prints an early banner
+2. verifies `multiboot_magic == 0x36d76289`
+3. treats `multiboot_info_addr` as the boot information pointer
+4. locates the memory map tag
+5. copies the `Available` areas into a fixed-capacity `BootMemoryMap` (`MAX_MEMORY_REGIONS = 32`), frame-aligned to 4 KiB
+6. reserves the kernel image, the Multiboot2 boot information, and the boot stack
+   (splitting regions as needed)
+7. prints the remaining usable regions
+8. builds the `FrameAllocator` and smoke-tests it: allocate a few frames, free one,
+   reallocate to prove the bitmap tracks reuse
 
-1. clear the VGA screen (so GRUB's menu text doesn't bleed into kernel output),
-   then print an early banner through the VGA text writer
-2. verify `multiboot_magic == 0x36d76289`
-3. treat `multiboot_info_addr` as a Multiboot2 boot information pointer
-4. locate the memory map tag
-5. copy the `Available` areas into a fixed-capacity `BootMemoryMap`, frame-aligned to 4 KiB
-6. reserve the kernel image, the Multiboot2 boot information, and the boot stack
-7. print the remaining usable regions
-8. smoke-test the `FrameAllocator` by allocating a few frames, freeing one,
-   and reallocating to prove the bitmap tracks reuse
+Every failure path — wrong magic, missing memory map tag, map that does not fit,
+reservation that splits too often, allocator over tracking capacity — prints an error
+and loops forever.
 
-If the magic is wrong, or the memory map tag is missing (or the map/allocator
-cannot be built), the kernel prints an error and loops forever.
+## Boot-information parsing
 
-## Boot Information Parsing
+The parser lives in [src/subs/boot/multiboot2.rs](../src/subs/boot/multiboot2.rs). It
+exists in-tree because the external `multiboot2` crate pulls in `alloc`, which this
+kernel does not have.
 
-The local Multiboot2 parser lives in [src/subs/boot/multiboot2.rs](../src/subs/boot/multiboot2.rs).
-
-It exists because the external `multiboot2` crate path used earlier pulled in `alloc`, which is not available in this kernel build.
-
-The parser currently supports:
-
-- boot information header parsing
-- generic tag walking with 8-byte alignment
-- memory map tag discovery
-- iteration over memory areas
-
-The parser currently treats memory area type `1` as usable RAM.
-
-## Current Memory Map Usage
-
-The memory map now feeds real allocation policy:
-
-- only memory areas reported as `Available` are kept
-- regions are aligned to 4 KiB frame boundaries
-- kernel image, Multiboot2 boot information, and boot stack ranges are reserved
-  (splitting regions where needed) so the allocator never hands them out
-- the filtered regions seed the `FrameAllocator`, which hands out physical frames
-
-See [architecture.md](architecture.md) for the memory subsystem in more detail.
+It supports: boot information header parsing, generic tag walking with 8-byte
+alignment, memory map tag discovery, and iteration over memory areas (type `1` = usable
+RAM). The memory map then feeds allocation policy in `src/subs/mem/` — see
+[architecture.md](architecture.md).
 
 ## Limitations
 
-This boot path is intentionally minimal and still has several limitations:
+- no IDT/GDT setup, no paging setup
+- no serial console fallback — VGA text only
+- no handoff from the boot stack to a long-lived kernel stack
+- validation beyond the bootloader magic and the memory map tag's presence
 
-- no IDT/GDT setup is documented here yet
-- no paging setup
-- no serial console fallback
-- no handoff from temporary boot stack to a long-lived kernel stack
-- no validation beyond the bootloader magic and presence of the memory map tag
-
-## Practical Checks
-
-Useful commands while working on boot:
+## Practical checks
 
 ```bash
 grub-file --is-x86-multiboot2 target/i686-runix-target/debug/runix && echo ok
 readelf -x .multiboot2 target/i686-runix-target/debug/runix
 readelf -l target/i686-runix-target/debug/runix
 ```
-
-## Next Steps
-
-The next useful extensions to this document are:
-
-- describe the exact Multiboot2 memory map format consumed by the kernel
-- define the transition from boot-time stack/setup into a real kernel initialization phase
-- document future paging and higher-half plans once they exist

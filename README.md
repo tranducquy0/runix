@@ -23,7 +23,10 @@ make iso build  # pack iso/ into runix.iso (grub-mkrescue)
 make run        # boot runix.iso in QEMU (GTK window)
 ```
 
-Other useful targets:
+The order matters: `make iso test` sits between `build` and `iso build` / `run` because
+it enforces the image GRUB needs to boot.
+
+Headless/agent flow and the remaining targets:
 
 ```bash
 make tests      # host-side tests for the boot parser and memory modules
@@ -33,9 +36,10 @@ make vm stop    # stop the headless VM
 make help       # list every target
 ```
 
-Run `make iso test` after every `make build`, before `make iso build` /
-`make run` — it enforces the image GRUB needs to boot. See
-[docs/build.md](docs/build.md) for requirements and toolchain details.
+`make vm screen` needs ~10s of grace after `make vm agent` — QEMU and GRUB boot before
+the kernel prints anything.
+
+See [docs/build.md](docs/build.md) for requirements and toolchain details.
 
 ## Documentation
 
