@@ -29,9 +29,17 @@ No heap/allocator crate exists yet. Everything is `no_std`, fixed-capacity, and 
 
 ## FrameAllocator behavior
 
-- Keeps its own copy of the region list + a cursor (`current_region`, `next_frame`), leaving the original `BootMemoryMap` inspectable.
-- `next_frame == 0` means "not started in the current region yet"; it is initialized to the region start on first alloc.
-- Walks regions in order; when one is exhausted it advances instead of assuming one flat RAM range. Returns `None` when all regions are used.
+- Bitmap-backed physical frame allocator over the reserved-filtered map (one bit per
+  4 KiB frame, up to `MAX_TRACKED_FRAMES` frames / 256 MiB). Construction is fallible:
+  `FrameAllocator::new` returns `None` when the boot map exceeds tracking capacity.
+- Keeps its own copy of the region list plus per-region frame offsets, leaving the
+  original `BootMemoryMap` inspectable.
+- `alloc()` returns the first free frame (first-fit) and marks it used.
+- `free(frame)` validates alignment, region ownership, and that the frame is currently
+  allocated; clears the bit and updates counters. Double frees and foreign frames
+  return `false`.
+- Tracks `total_frames`, `used_frames`, and `free_frames()` counters.
+- Returns `None` when all regions are exhausted.
 
 ## Before paging
 

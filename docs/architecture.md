@@ -45,9 +45,9 @@ have. See [boot.md](boot.md) for the entry contract and tag format.
   rather than truncating.
 - `ReservedRange` / `BootMemoryMap::reserve` — carves ranges that are already in use out
   of the map, splitting regions as needed so the allocator never sees them.
-- `FrameAllocator` — a simple bump allocator over the reserved-filtered map. It walks
-  regions in order and hands out whole 4 KiB frames (`FRAME_SIZE`), never assuming RAM
-  is one flat range.
+- `FrameAllocator` — a bitmap-backed physical frame allocator over the
+  reserved-filtered map. It tracks up to `MAX_TRACKED_FRAMES` frames, supports
+  `alloc()` and `free()` with validation, and never assumes RAM is one flat range.
 
 ### Handlers (`src/subs/handlers`)
 

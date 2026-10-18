@@ -85,19 +85,59 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
         );
     }
 
-    // This is still a smoke test for the allocator. It proves the filtered boot
-    // memory map can already produce sane page-sized frames.
-    let mut allocator = FrameAllocator::new(&memory_map);
-    println!("first few allocatable frames:");
-    for _ in 0..4 {
+    // The allocator is fallible now: it refuses to track more frames than its
+    // fixed bitmap can hold, so handle that loudly instead of panicking.
+    let mut allocator = match FrameAllocator::new(&memory_map) {
+        Some(allocator) => allocator,
+        None => {
+            println!("boot memory map exceeds allocator tracking capacity");
+            loop {}
+        }
+    };
+
+    println!(
+        "frame allocator ready: {} total, {} free",
+        allocator.total_frames(),
+        allocator.free_frames()
+    );
+
+    // Smoke test: allocate a few frames, free one, and reallocate to prove the
+    // bitmap tracks frees and reuses frames instead of only bumping forward.
+    println!("allocating a few frames:");
+    let mut frames = [0usize; 4];
+    let mut allocated = 0usize;
+    for slot in &mut frames {
         match allocator.alloc() {
-            Some(frame) => println!("frame = {:#x}", frame),
+            Some(frame) => {
+                *slot = frame;
+                allocated += 1;
+                println!("  frame = {:#x}", frame);
+            }
             None => {
-                println!("no more frames");
+                println!("  no more frames");
                 break;
             }
         }
     }
+
+    if allocated > 0 {
+        println!("freeing first allocated frame: {:#x}", frames[0]);
+        if !allocator.free(frames[0]) {
+            println!("  free failed");
+        } else {
+            match allocator.alloc() {
+                Some(frame) => println!("  reused after free: {:#x}", frame),
+                None => println!("  no frame reused after free"),
+            }
+        }
+    }
+
+    println!(
+        "frame allocator stats: {} total, {} used, {} free",
+        allocator.total_frames(),
+        allocator.used_frames(),
+        allocator.free_frames()
+    );
 
     loop {}
 }
