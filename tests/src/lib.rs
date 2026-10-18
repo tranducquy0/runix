@@ -8,6 +8,10 @@
 
 pub mod subs;
 
+/// Test-only builders: fabricate Multiboot2 boot blocks and raw
+/// `MemoryArea` slices so parser tests exercise the real kernel code
+/// without a bootloader. Data is leaked on purpose to hand out `'static`
+/// references (see `memory_areas`).
 pub mod testutil {
     use crate::subs::boot::multiboot2::{BootInformation, MemoryArea};
 

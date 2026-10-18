@@ -3,6 +3,7 @@
 use runix_tests::subs::boot::multiboot2::BOOTLOADER_MAGIC;
 use runix_tests::testutil::{boot_info_from_block, multiboot2_with_memory_map, TYPE_AVAILABLE};
 
+// A well-formed block with two available areas parses entry-for-entry.
 #[test]
 fn parses_memory_map_entries() {
     let block = multiboot2_with_memory_map(&[
@@ -22,6 +23,7 @@ fn parses_memory_map_entries() {
     assert!(areas[1].is_available());
 }
 
+// Non-available areas pass through the parser and report is_available() == false.
 #[test]
 fn unavailable_areas_are_reported_as_such() {
     let block = multiboot2_with_memory_map(&[(0xc000_0000, 0x0040_0000, 4)]);
@@ -31,6 +33,7 @@ fn unavailable_areas_are_reported_as_such() {
     assert!(!tag.memory_areas()[0].is_available());
 }
 
+// Header + end tag only: the walker returns None instead of guessing.
 #[test]
 fn missing_memory_map_tag_returns_none() {
     // Header + end tag only; no tags in between.
@@ -43,6 +46,7 @@ fn missing_memory_map_tag_returns_none() {
     assert!(info.memory_map_tag().is_none());
 }
 
+// Unknown tag types are skipped with correct 8-byte alignment, not fatal.
 #[test]
 fn tag_walk_skips_unknown_tags_before_memmap() {
     // Put a bogus tag (type 99) before the memory map; the walker must skip
@@ -82,6 +86,7 @@ fn tag_walk_skips_unknown_tags_before_memmap() {
     assert_eq!(tag.memory_areas()[0].size(), 0x0020_0000);
 }
 
+// The end tag bounds the walk: tags placed after it are never observed.
 #[test]
 fn end_tag_is_honored() {
     // A memory-map tag placed after the end tag must NOT be picked up.
@@ -106,6 +111,7 @@ fn end_tag_is_honored() {
     assert!(info.memory_map_tag().is_none());
 }
 
+// Pin the magic constant so a typo here can't desync from the Multiboot2 spec.
 #[test]
 fn bootloader_magic_constant_matches_spec() {
     assert_eq!(BOOTLOADER_MAGIC, 0x36d7_6289);

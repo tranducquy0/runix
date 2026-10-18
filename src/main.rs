@@ -1,3 +1,17 @@
+//! runix kernel entry point.
+//!
+//! Boot flow (GRUB → Multiboot2 → this crate):
+//! 1. `asm/boot.asm` builds a stack, forwards `eax`/`ebx` to [`kernel_main`].
+//! 2. [`kernel_main`] clears the VGA screen, validates the Multiboot2 magic,
+//!    and parses the boot-info block for a memory map.
+//! 3. Occupied spans (kernel image, boot-info block, boot stack) are reserved
+//!    out of the map, a [`FrameAllocator`] is built from the remainder, and a
+//!    small alloc/free smoke test exercises the bitmap.
+//! 4. Everything halts in `loop {}` — no interrupts or scheduling yet.
+//!
+//! The Multiboot2 header itself lives at the bottom of this file in
+//! `.multiboot2` so GRUB can find it within the image's first 32 KiB.
+
 // disable normal features that can't build a kernel
 #![no_main]
 #![no_std]
@@ -28,6 +42,7 @@ unsafe extern "C" {
     static boot_stack_top: u8;
 }
 
+// Boot entry: validate Multiboot2 handoff, build the frame allocator, smoke-test alloc/free.
 #[unsafe(no_mangle)]
 extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
     // Start from a clean slate: without this, whatever GRUB or the firmware
@@ -147,7 +162,7 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
     loop {}
 }
 
-// multiboot2 header checksum
+// Multiboot2 header constants: 32-bit sum of magic/arch/len/checksum must be zero.
 const MULTIBOOT2_HEADER_MAGIC: u32 = 0xE85250D6;
 const MULTIBOOT2_ARCHITECTURE_I386: u32 = 0;
 const MULTIBOOT2_HEADER_LENGTH: u32 = 40;
@@ -156,6 +171,13 @@ const CHECKSUM: u32 = (0u32).wrapping_sub(
 );
 
 
+/// Raw 40-byte Multiboot2 header placed in `.multiboot2` by the linker.
+///
+/// GRUB scans the image's first 32 KiB for this structure; its byte array
+/// encodes magic + architecture + length + checksum, an information-request
+/// tag asking for the memory map (tag 6), and the required end tag. All
+/// fields are literal bytes so GRUB sees exactly the on-disk layout the
+/// spec demands, independent of Rust layout rules.
 #[repr(C, align(8))]
 struct MultibootHeader {
     // Raw bytes avoid Rust layout surprises in a format where GRUB expects

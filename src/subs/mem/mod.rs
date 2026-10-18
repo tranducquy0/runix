@@ -1,12 +1,45 @@
+// Boot-time physical memory map.
+//
+// NOTE: this file is `include!`d by the host-test shim, so it must use plain
+// `//` comments at module level (inner `//!` docs are illegal in expansions).
+//
+// Before any frame allocator exists, the kernel needs a fixed-capacity
+// description of usable RAM that it can carve reserved ranges out of.
+// This module provides that:
+//
+// - `BootMemoryMap` — fixed array of `MemoryRegion`s, seeded from the
+//   bootloader's Multiboot2 memory areas (available types only,
+//   frame-aligned) and then split around `ReservedRange`s (kernel image,
+//   boot stack, boot-info block).
+// - `MemoryRegion` — a half-open `[start, end)` byte range that is
+//   always 4 KiB frame-aligned once it lives in the map.
+// - `ReservedRange` — an occupied span to punch out of the map.
+//
+// Design rules:
+// - No allocation: everything is `[T; MAX_MEMORY_REGIONS]` on the stack.
+// - Failure is loud: overflowing the 32-slot capacity returns `None`/
+//   `false` so boot stops with a message instead of silently losing RAM.
+// - Reservation alignment only ever *shrinks* usable regions, so a frame
+//   partially covered by a reserved range is never handed out.
+
 pub mod allocator;
 
 use crate::subs::boot::multiboot2::MemoryArea;
 
+/// Maximum usable regions the boot map (and the allocator) can track.
 pub const MAX_MEMORY_REGIONS: usize = 32;
+/// Frame size the whole memory subsystem works in units of (x86 4 KiB pages).
 pub const FRAME_SIZE: usize = 4096;
 
+/// Shared zero-value for a region slot: `[0, 0)`, i.e. empty.
 const EMPTY_REGION: MemoryRegion = MemoryRegion { start: 0, end: 0 };
 
+/// Half-open byte span `[start, end)` that must not be handed out.
+///
+/// Constructed from linker symbols (`__kernel_start`/`__kernel_end`, the
+/// boot stack) and the bootloader's boot-info block; passed to
+/// [`BootMemoryMap::reserve`]. Bounds are normalized on construction so
+/// callers may pass `(high, low)` without breaking reservation logic.
 #[derive(Clone, Copy)]
 pub struct ReservedRange {
     start: usize,
@@ -14,6 +47,7 @@ pub struct ReservedRange {
 }
 
 impl ReservedRange {
+    // Build a range, normalizing reversed bounds with min/max.
     pub fn new(start: usize, end: usize) -> Self {
         // Normalize once so callers do not need to worry about ordering.
         Self {
@@ -22,11 +56,17 @@ impl ReservedRange {
         }
     }
 
+    // True when the span covers no bytes (start == end); a no-op to reserve.
     fn is_empty(&self) -> bool {
         self.start >= self.end
     }
 }
 
+/// One usable, frame-aligned physical region `[start, end)`.
+///
+/// Stored by value in both the boot map and the frame allocator. Once in a
+/// [`BootMemoryMap`], `start` and `end` are guaranteed multiples of
+/// [`FRAME_SIZE`] (see [`MemoryRegion::align_to_frames`]).
 #[derive(Clone, Copy)]
 pub struct MemoryRegion {
     start: usize,
@@ -34,22 +74,27 @@ pub struct MemoryRegion {
 }
 
 impl MemoryRegion {
+    // Empty region constant, used to pre-fill fixed arrays.
     pub const fn empty() -> Self {
         EMPTY_REGION
     }
 
+    // First byte of the region.
     pub fn start(&self) -> usize {
         self.start
     }
 
+    // One-past-the-last byte (exclusive end).
     pub fn end(&self) -> usize {
         self.end
     }
 
+    // Byte size of the region (saturating; never negative).
     pub fn size(&self) -> usize {
         self.end.saturating_sub(self.start)
     }
 
+    // Shrink to fully contained frames: start up, end down (never grows).
     pub fn align_to_frames(self) -> Self {
         // Regions are treated as [start, end), so aligning `start` up and `end`
         // down safely drops any partial frame at either edge.
@@ -59,6 +104,7 @@ impl MemoryRegion {
         }
     }
 
+    // Build a region, normalizing reversed bounds; used while splitting.
     fn new(start: usize, end: usize) -> Self {
         Self {
             start: start.min(end),
@@ -66,11 +112,18 @@ impl MemoryRegion {
         }
     }
 
+    // True when the region covers no whole bytes/frames.
     fn is_empty(&self) -> bool {
         self.start >= self.end
     }
 }
 
+/// Fixed-capacity set of usable regions describing all RAM the kernel may use.
+///
+/// Built once per boot by [`BootMemoryMap::from_multiboot`], then mutated
+/// only by [`BootMemoryMap::reserve`] (which punches out occupied spans,
+/// splitting regions as needed). The frame allocator later copies the final
+/// region list, so this map stays inspectable for diagnostics.
 pub struct BootMemoryMap {
     // No allocator exists during early boot, so this is a fixed-capacity array
     // instead of a growable collection.
@@ -79,6 +132,7 @@ pub struct BootMemoryMap {
 }
 
 impl BootMemoryMap {
+    // Convert Multiboot2 areas into frame-aligned usable regions, skipping non-available ones.
     pub fn from_multiboot(areas: &[MemoryArea]) -> Option<Self> {
         let mut map = Self::new();
 
@@ -116,6 +170,7 @@ impl BootMemoryMap {
         Some(map)
     }
 
+    // Punch a reserved span out of the map, splitting regions around it; false on capacity overflow.
     pub fn reserve(&mut self, reserved: ReservedRange) -> bool {
         if reserved.is_empty() {
             return true;
@@ -159,10 +214,12 @@ impl BootMemoryMap {
         true
     }
 
+    // Borrow the live usable regions (`&regions[..len]`).
     pub fn regions(&self) -> &[MemoryRegion] {
         &self.regions[..self.len]
     }
 
+    // Empty map with zeroed region slots.
     fn new() -> Self {
         Self {
             regions: [EMPTY_REGION; MAX_MEMORY_REGIONS],
@@ -170,19 +227,23 @@ impl BootMemoryMap {
         }
     }
 
+    // Append one region; false if empty or the fixed capacity is exhausted.
     fn push(&mut self, region: MemoryRegion) -> bool {
         push_region(&mut self.regions, &mut self.len, region)
     }
 }
 
+// Round `addr` up to the next multiple of `align` (a power of two).
 const fn align_up(addr: usize, align: usize) -> usize {
     (addr + align - 1) & !(align - 1)
 }
 
+// Round `addr` down to the previous multiple of `align` (a power of two).
 const fn align_down(addr: usize, align: usize) -> usize {
     addr & !(align - 1)
 }
 
+// Shared fixed-array append used by both construction and reserve(); rejects empty slots.
 fn push_region(
     regions: &mut [MemoryRegion; MAX_MEMORY_REGIONS],
     len: &mut usize,

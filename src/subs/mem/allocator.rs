@@ -1,8 +1,33 @@
+// Bitmap-backed physical frame allocator.
+//
+// NOTE: this file is `include!`d by the host-test shim, so it must use plain
+// `//` comments at module level (inner `//!` docs are illegal in expansions).
+//
+// One bit per 4 KiB frame, stored in a single `static mut` bitmap shared
+// by (at most) one live `FrameAllocator` at a time — the allocator only
+// exists after GRUB hands control over and nothing runs concurrently yet.
+//
+// Index space: usable regions from `BootMemoryMap` are concatenated into
+// one flat index space (`region_frame_offsets[i]` = first global index of
+// region `i`). A global index maps back to a physical address through
+// `FrameAllocator::index_to_address`; physical addresses map forward to
+// an index by locating their owning region. This keeps the bitmap small
+// and region-count-independent while still honoring holes between regions.
+//
+// Invariants:
+// - All usable regions are frame-aligned and non-overlapping (guaranteed
+//   by `BootMemoryMap`), so address <-> index mapping is a bijection.
+// - A bit is 1 iff the frame has been handed out by `alloc` and not yet
+//   returned by `free`; double frees are rejected by checking the bit.
+// - Construction fails (`None`) if the map exceeds tracking capacity, so
+//   usable RAM is never silently dropped.
+
 use super::{BootMemoryMap, FRAME_SIZE, MAX_MEMORY_REGIONS, MemoryRegion};
 
 // Upper bound on how much physical memory this allocator can track. The bitmap
 // below has one bit per 4 KiB frame up to this limit.
 pub const MAX_TRACKED_FRAMES: usize = 256 * 1024 * 1024 / FRAME_SIZE;
+// Number of u64 words needed to hold one bit per tracked frame.
 const BITMAP_WORDS: usize = (MAX_TRACKED_FRAMES + 63) / 64;
 
 // Stored outside the allocator struct. `static mut` is sound here because the
@@ -10,6 +35,12 @@ const BITMAP_WORDS: usize = (MAX_TRACKED_FRAMES + 63) / 64;
 // concurrently with it yet.
 static mut FRAME_BITMAP: [u64; BITMAP_WORDS] = [0u64; BITMAP_WORDS];
 
+/// First-fit frame allocator over a [`BootMemoryMap`]'s usable regions.
+///
+/// Allocated addresses are always 4 KiB aligned; `free` accepts only frames
+/// the allocator could have produced (aligned, inside a known region, still
+/// allocated). Counters (`total`/`used`/`free`) are maintained incrementally
+/// for diagnostics.
 pub struct FrameAllocator {
     // Usable regions copied out of the `BootMemoryMap`. The allocator keeps its
     // own copy so the original map stays inspectable.
@@ -29,8 +60,7 @@ pub struct FrameAllocator {
 }
 
 impl FrameAllocator {
-    // Returns `None` when the boot map describes more frames than this allocator
-    // can track, so the failure stays loud instead of silently dropping memory.
+    // Build from a boot map and reset the shared bitmap; None if capacity would be exceeded.
     pub fn new(memory_map: &BootMemoryMap) -> Option<Self> {
         let source = memory_map.regions();
         if source.len() > MAX_MEMORY_REGIONS {
@@ -74,6 +104,7 @@ impl FrameAllocator {
         })
     }
 
+    // Allocate the lowest free frame (first-fit); None when exhausted.
     pub fn alloc(&mut self) -> Option<usize> {
         // First-fit scan over the global frame index space.
         let mut index = 0;
@@ -94,6 +125,7 @@ impl FrameAllocator {
         None
     }
 
+    // Return a frame to the pool; false if misaligned, unknown, or already free.
     pub fn free(&mut self, frame: usize) -> bool {
         // Frames are always handed out aligned, so reject anything else early.
         if frame % FRAME_SIZE != 0 {
@@ -126,18 +158,22 @@ impl FrameAllocator {
         false
     }
 
+    // Total frames tracked across all usable regions.
     pub fn total_frames(&self) -> usize {
         self.total_frames
     }
 
+    // Frames currently handed out by alloc().
     pub fn used_frames(&self) -> usize {
         self.used_frames
     }
 
+    // Frames available for allocation (total - used, saturating).
     pub fn free_frames(&self) -> usize {
         self.total_frames.saturating_sub(self.used_frames)
     }
 
+    // True if the frame is aligned and falls inside any usable region (allocated or not).
     #[allow(dead_code)]
     pub fn contains(&self, frame: usize) -> bool {
         if frame % FRAME_SIZE != 0 {
@@ -156,6 +192,7 @@ impl FrameAllocator {
         false
     }
 
+    // Map a global bit index to its physical address; None if the index falls in no region.
     fn index_to_address(&self, index: usize) -> Option<usize> {
         let mut i = 0;
         while i < self.region_count {

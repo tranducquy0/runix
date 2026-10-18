@@ -9,6 +9,7 @@ KERNEL_NAME=rkrnl
 # (the swallowing rule for it lives at the bottom of this file).
 SUB=$(word 2,$(MAKECMDGOALS))
 
+# Compile the freestanding i686 kernel (build-std, custom target spec).
 build:
 	@echo "[*] building..."
 	@cargo +nightly build \
@@ -25,14 +26,17 @@ vm:
 	@test -n "$(SUB)" || { echo "usage: make vm launch|agent|screen|stop"; exit 1; }
 	@bash scripts/vm.sh "$(SUB)"
 
+# Run the host-side kernel module tests (tests/ crate, host triple).
 tests:
 	@echo "[*] running kernel module tests on host..."
 	@cd tests && cargo test
 
+# Boot runix.iso in QEMU with a visible GTK window.
 run:
 	@echo "[*] starting QEMU with built ISO..."
 	@qemu-system-$(QEMU_TGT) -cdrom runix.iso -display gtk
 
+# Remove all build artifacts (kernel, ISO, host-test target).
 clean:
 	@echo "[*] cleaning..."
 	@echo "	[*] cargo"
@@ -42,6 +46,7 @@ clean:
 	@echo "	[*] tests"
 	@rm tests/target -rf
 
+# List every supported command with a one-line description.
 help:
 	@echo -e "available cmds:\n\
 	 build: build kernel\n\

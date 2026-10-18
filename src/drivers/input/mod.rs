@@ -1,1 +1,1 @@
-// Placeholder for future input drivers (e.g. keyboard.rs).
+//! Input drivers. Placeholder for future input drivers (e.g. keyboard.rs).

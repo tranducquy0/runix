@@ -24,7 +24,7 @@
 - Host tests: `tests/runix-tests` crate re-exposes kernel logic modules (`subs/boot/multiboot2`, `subs/mem`) via thin `include!`/`#[path]` shims in `tests/src/subs/`; hardware-coupled code (VGA, boot asm) is covered by the QEMU flow instead.
 
 ## Skills
-Repo-local agent skills live in `.opencode/skills/` (`kernel-build`, `kernel-memory`, `kernel-multiboot2`, `kernel-vga-output`, `commit`). Load one via the `skill` tool when working in that area; `kernel-build` covers toolchain gotchas (e.g. the `ld.lld` / `rust-lld` override) and `commit` codifies the Conventional Commits style used in this repo.
+Repo-local agent skills live in `.opencode/skills/` (`kernel-build`, `kernel-memory`, `kernel-multiboot2`, `kernel-vga-output`, `commit`, `code-review`). Load one via the `skill` tool when working in that area; `kernel-build` covers toolchain gotchas (e.g. the `ld.lld` / `rust-lld` override), `commit` codifies the Conventional Commits style used in this repo, and `code-review` governs PR/diff reviews (evidence-based findings, severity rules, read-only scope).
 
 ## Verification notes
 - After building, run `make iso test` before `make iso build`/`make run` — it enforces the image is valid ELF and Multiboot2-compliant.

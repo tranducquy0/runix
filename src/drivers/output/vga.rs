@@ -1,10 +1,25 @@
+//! VGA text-mode output driver.
+//!
+//! Writes to physical VGA memory at `0xb8000` (80x25 cells of
+//! `[char, color]` byte pairs). The global [`WRITER`] is a `spin::Mutex`
+//! because the kernel is single-threaded with interrupts off — any code can
+//! `print!`/`println!` (macros below expand to `WRITER.lock()`).
+//!
+//! Cursor state (`row`, `column`) lives in the [`Writer`] and wraps by
+//! scrolling: the oldest line is dropped whenever the bottom row is
+//! written past. Non-printable bytes render as `0xfe` blocks.
+
 use core::fmt;
 use spin::Mutex; // for avoiding some weird cases like multi mutable instances
 // buffer width and size
 const BUFFER_WIDTH: usize = 80;
 const BUFFER_HEIGHT: usize = 25;
 
-// writer struct
+/// Stateful cursor + buffer pointer for one VGA text screen.
+///
+/// All methods are `&mut self` and assume the caller holds [`WRITER`]'s
+/// lock; `buffer` is a raw pointer to `0xb8000` rather than a reference
+/// because it points at memory-mapped I/O, not Rust-managed storage.
 pub struct Writer {
     buffer: *mut u8, // 0xb8000 - the OG VGA addr
     row: usize, // keeping track of the current row
@@ -13,6 +28,7 @@ pub struct Writer {
 }
 
 impl Writer {
+    // Empty cursor at the top-left, white on black.
     pub const fn new() -> Self { // new instance of writer struct
         Self {
             buffer: 0xb8000 as *mut u8,
@@ -22,6 +38,7 @@ impl Writer {
         }
     }
 
+    // Put one printable byte at the cursor, advancing/wrapping/scrolling as needed.
     fn write_byte(&mut self, byte: u8) { // receive a byte (type: u8), check it, then write it to VGA memory
         match byte {
             b'\n' => self.newline(),
@@ -48,6 +65,7 @@ impl Writer {
         }
     }
 
+    // Move to column 0 of the next row, or scroll when already on the last row.
     fn newline(&mut self) {
         self.column = 0;
 
@@ -58,6 +76,7 @@ impl Writer {
         }
     }
 
+    // Shift every row up one, blank the bottom row, park cursor at line start.
     fn scroll(&mut self) {
         for row in 1..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
@@ -79,6 +98,7 @@ impl Writer {
         self.column = 0;
     }
 
+    // Fill one row with spaces in the current color.
     fn clear_row(&mut self, row: usize) { // "clear" a row (fill it with spaces)
         for col in 0..BUFFER_WIDTH {
             let idx = (row * BUFFER_WIDTH + col) * 2;
@@ -90,6 +110,7 @@ impl Writer {
         }
     }
 
+    // Blank every row and reset the cursor to the top-left (used at boot).
     pub fn clear_screen(&mut self) { // wipe the whole buffer and reset the cursor
         for row in 0..BUFFER_HEIGHT {
             self.clear_row(row);
@@ -104,6 +125,7 @@ impl Writer {
      * work fine for ASCII characters (0x20..0x7e)
      * print a square for non-ASCII characters
     */
+    // Render a str byte-by-byte: printable ASCII and '\n' pass through, everything else becomes 0xfe.
     pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
@@ -126,7 +148,7 @@ impl fmt::Write for Writer {
     }
 }
 
-// create WRITER Mutex instance
+/// Global screen cursor behind a `spin::Mutex`; the print macros lock it.
 pub static WRITER: Mutex<Writer> = Mutex::new(Writer::new());
 
 // export both print! and println! macros

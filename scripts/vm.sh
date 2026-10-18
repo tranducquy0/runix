@@ -13,6 +13,7 @@ monitor_sock="$PWD/.run/vm-monitor.sock"
 run_dir=".run"
 image="runix.iso"
 
+# Boot runix.iso headless in the background with a monitor on a unix socket.
 start() {
   if [[ ! -f "$image" ]]; then
     echo "vm.sh: missing $image, run 'make build && make iso build' first" >&2
@@ -113,6 +114,7 @@ for i in range(0, len(out), 80):
 EOF
 }
 
+# Quit the VM via its monitor socket and drop the run dir.
 stop() {
   [[ -S "$monitor_sock" ]] || {
     echo "vm.sh: no monitor at $monitor_sock, run 'make vm agent' first" >&2
@@ -123,6 +125,7 @@ stop() {
   echo "[*] VM stopped"
 }
 
+# Print usage and exit non-zero (unknown or missing subcommand).
 usage() {
   echo "usage: vm.sh launch|agent|foreground|screen|stop" >&2
   exit 1
