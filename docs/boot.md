@@ -93,16 +93,19 @@ If `kernel_main` ever returns, the stub halts in an infinite loop.
 
 Its current responsibilities are:
 
-1. print an early banner through the VGA text writer
+1. clear the VGA screen (so GRUB's menu text doesn't bleed into kernel output),
+   then print an early banner through the VGA text writer
 2. verify `multiboot_magic == 0x36d76289`
 3. treat `multiboot_info_addr` as a Multiboot2 boot information pointer
 4. locate the memory map tag
 5. copy the `Available` areas into a fixed-capacity `BootMemoryMap`, frame-aligned to 4 KiB
 6. reserve the kernel image, the Multiboot2 boot information, and the boot stack
 7. print the remaining usable regions
-8. smoke-test the `FrameAllocator` by allocating a few frames
+8. smoke-test the `FrameAllocator` by allocating a few frames, freeing one,
+   and reallocating to prove the bitmap tracks reuse
 
-If the magic is wrong, or the memory map tag is missing, the kernel prints an error and loops forever.
+If the magic is wrong, or the memory map tag is missing (or the map/allocator
+cannot be built), the kernel prints an error and loops forever.
 
 ## Boot Information Parsing
 

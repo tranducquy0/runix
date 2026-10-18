@@ -11,15 +11,24 @@
 
 ```bash
 make build      # compile the kernel with cargo +nightly (custom target i686-runix-target)
-make test       # validate the image is ELF and Multiboot2-compliant
-make build_iso  # copy the kernel into iso/boot/rkrnl and build runix.iso with grub-mkrescue
-make run        # boot runix.iso in QEMU (qemu-system-i386 -cdrom runix.iso)
-make clean      # cargo clean, remove runix.iso and the staged kernel
+make iso test   # validate the image is ELF and Multiboot2-compliant
+make iso build  # copy the kernel into iso/boot/rkrnl and build runix.iso with grub-mkrescue
+make run        # boot runix.iso in QEMU (qemu-system-i386 -cdrom runix.iso, GTK window)
+make tests      # run the host-side tests for the boot parser and memory modules
+make clean      # cargo clean, remove runix.iso, the staged kernel and tests/target
+make help       # list all targets
 ```
+
+`iso` and `vm` are subcommand targets: the second word selects the action
+(`make iso test`, `make iso build`, `make vm launch`, `make vm agent`,
+`make vm screen`, `make vm stop`, `make vm foreground`). For headless runs,
+`make vm agent` boots with a monitor socket, `make vm screen` decodes the
+kernel's VGA text output through it (QEMU/GRUB takes ~10s before output
+appears), and `make vm stop` shuts it down.
 
 Build output lands at `target/i686-runix-target/debug/runix`.
 
-Run `make test` after `make build` and before `make build_iso` / `make run`: it enforces
+Run `make iso test` after `make build` and before `make iso build` / `make run`: it enforces
 that the kernel is a valid ELF binary and carries a valid Multiboot2 header, which is
 what GRUB needs to boot it. The check itself lives in
 [`scripts/kernel_image.sh`](../scripts/kernel_image.sh).
@@ -35,5 +44,7 @@ what GRUB needs to boot it. The check itself lives in
   depend on a prebuilt `std` for the custom target.
 - Only external dependency: [`spin`](https://crates.io/crates/spin) (for the VGA writer
   mutex).
-- The binary disables `test` and `bench` ([`Cargo.toml`](../Cargo.toml)); use `make test`
-  for image validation rather than `cargo test`.
+- The binary disables `test` and `bench` ([`Cargo.toml`](../Cargo.toml)); the kernel is
+  never exercised by `cargo test` directly. Use `make iso test` for image validation and
+  `make tests` for the host-side test crate under [`tests/`](../tests), which re-exposes
+  the parser and memory modules for testing on the host triple.

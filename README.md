@@ -17,13 +17,25 @@ it idles — no scheduler, userspace, filesystem, interrupts, or paging yet.
 ## Quick start
 
 ```bash
-make build      # compile the kernel
-make test       # validate the image is ELF + Multiboot2-compliant
-make build_iso  # build runix.iso
-make run        # boot it in QEMU
+make build      # compile the kernel (cargo +nightly, custom i686 target)
+make iso test   # validate the image is ELF + Multiboot2-compliant
+make iso build  # pack iso/ into runix.iso (grub-mkrescue)
+make run        # boot runix.iso in QEMU (GTK window)
 ```
 
-See [docs/build.md](docs/build.md) for requirements and toolchain details.
+Other useful targets:
+
+```bash
+make tests      # host-side tests for the boot parser and memory modules
+make vm agent   # boot headless with a monitor socket (for scripts/agents)
+make vm screen  # dump the kernel's VGA text output via the monitor
+make vm stop    # stop the headless VM
+make help       # list every target
+```
+
+Run `make iso test` after every `make build`, before `make iso build` /
+`make run` — it enforces the image GRUB needs to boot. See
+[docs/build.md](docs/build.md) for requirements and toolchain details.
 
 ## Documentation
 

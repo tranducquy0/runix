@@ -26,7 +26,9 @@ Other relevant files:
 - [`scripts/linker.ld`](../scripts/linker.ld) — linker script; keeps `.multiboot2` near
   the image start.
 - [`scripts/kernel_image.sh`](../scripts/kernel_image.sh) — the image validation behind
-  `make test`.
+  `make iso test`.
+- [`tests/`](../tests) — host-side test crate that re-exposes the boot parser and
+  memory modules via thin `include!` / `#[path]` shims, run with `make tests`.
 
 ## Subsystems
 
@@ -65,7 +67,7 @@ placeholder for future drivers such as `keyboard.rs`.
 
 GRUB enters the kernel at `_start` with `eax = 0x36d76289` (Multiboot2 magic) and `ebx`
 pointing at the Multiboot2 boot information. The assembly stub
-([`src/asm/boot.asm`](../src/asm/boot.asm)) builds a temporary 4 KiB boot stack in
+([`src/asm/boot.asm`](../src/asm/boot.asm)) builds a temporary 32 KiB boot stack in
 `.bss`, then pushes `ebx` and `eax` and calls
 `kernel_main(multiboot_magic, multiboot_info_addr)`.
 
