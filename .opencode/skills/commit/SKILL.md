@@ -18,7 +18,7 @@ type: subject
 - Body only when the "why" or a list of changes is not obvious from the subject.
   Use `-` bullets; wrap continuation lines.
 - Trailer for agent-authored commits:
-  `Co-authored-by: opencode-agent[bot] <opencode-agent[bot]@no-reply.users.github.com>`
+  `Co-authored-by: opencode-agent[bot] <opencode-agent[bot]@users.noreply.github.com>`
 
 ## Types (as used in history)
 
