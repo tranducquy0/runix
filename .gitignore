@@ -2,3 +2,5 @@
 /iso/boot/rkrnl
 /iso/boot/kernel.bin
 /*.iso
+/tests/target
+/.run/
