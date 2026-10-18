@@ -1,0 +1,4 @@
+[build]
+# The repo root config defaults to the i686 kernel target; the host tests need
+# the normal host triple instead. Deeper config wins, so this overrides it.
+target = "x86_64-unknown-linux-gnu"
