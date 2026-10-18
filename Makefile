@@ -16,7 +16,7 @@ build_iso:
 	@grub-mkrescue -o runix.iso iso
 run:
 	@echo "[*] starting QEMU with built ISO..."
-	@qemu-system-$(QEMU_TGT) -cdrom runix.iso
+	@qemu-system-$(QEMU_TGT) -cdrom runix.iso -display gtk
 clean:
 	@echo "[*] cleaning..."
 	@echo "	[*] cargo"
@@ -27,3 +27,5 @@ clean:
 test:
 	@echo "[*] testing kernel image"
 	@bash scripts/kernel_image.sh
+help:
+	@echo -e "avaliable cmds:\n build_iso: build an ISO from built karnel\n build: build kernel\n test: test kernel against multiboot2\n clean: cleanup"
