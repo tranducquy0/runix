@@ -8,11 +8,11 @@ description: Build, validate, and run the runix kernel. Use when compiling, test
 Exact order matters:
 
 1. `make build` — compile kernel.
-2. `make test` — validate the image (run before ISO/boot).
-3. `make build_iso` — pack `iso/` into `runix.iso` (only after `make test` passes).
-4. `make run` — boot ISO in QEMU.
+2. `make iso test` — validate the image (run before ISO/boot).
+3. `make iso build` — pack `iso/` into `runix.iso` (only after `make iso test` passes).
+4. `make run` — boot ISO in QEMU (GTK window). For agent/headless checks use `make vm agent` + `make vm screen` + `make vm stop`.
 
-`make clean` clears cargo artifacts + `runix.iso` + `iso/boot/rkrnl`.
+`make tests` runs host-side logic tests (`tests/` crate). `make clean` clears cargo artifacts + `runix.iso` + `iso/boot/rkrnl` + `tests/target`.
 
 ## What `make build` actually runs
 
@@ -34,7 +34,7 @@ The target spec sets `"linker": "ld.lld"`. If `ld.lld` is not on PATH, link fail
 export CARGO_TARGET_I686_RUNIX_TARGET_LINKER=$(ls ~/.rustup/toolchains/nightly-*/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld | head -1)
 ```
 
-## What `make test` checks
+## What `make iso test` checks
 
 Runs `scripts/kernel_image.sh` on `target/i686-runix-target/debug/runix`. It requires `readelf` and `grub-file` on PATH:
 
@@ -45,4 +45,4 @@ If either tool is missing the script exits with an error; install `grub2-common`
 
 ## No-test caveat
 
-The binary is declared with `test = false, bench = false` in `Cargo.toml`. `cargo test` does nothing useful here; `make test` is the real verification gate.
+The binary is declared with `test = false, bench = false` in `Cargo.toml`. `cargo test` does nothing useful here; `make iso test` is the image gate and `make tests` runs the host-side logic tests (`tests/` crate).
