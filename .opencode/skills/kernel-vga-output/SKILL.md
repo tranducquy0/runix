@@ -16,6 +16,7 @@ description: VGA text output for runix — WRITER mutex, print/println macros, a
 - `spin::Mutex<Writer>` as `pub static WRITER` — no interrupts yet, so a spin lock is the whole synchronization story.
 - `unsafe impl Send for Writer {}` and `Sync` are required so the `static Mutex<Writer>` is allowed; don't remove.
 - Handles `\n`, column overflow (newline), and scrolling (shifts rows up, clears last row). Non-ASCII bytes (outside `0x20..=0x7e`) render as `0xfe` (a block).
+- `clear_screen()` wipes all 25 rows and resets the cursor; `kernel_main` calls it before the first `println!` so GRUB/firmware leftovers don't bleed into kernel output.
 
 ## Macros — path is load-bearing
 

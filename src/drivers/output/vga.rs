@@ -90,6 +90,15 @@ impl Writer {
         }
     }
 
+    pub fn clear_screen(&mut self) { // wipe the whole buffer and reset the cursor
+        for row in 0..BUFFER_HEIGHT {
+            self.clear_row(row);
+        }
+
+        self.row = 0;
+        self.column = 0;
+    }
+
     /**
      * write a string to the vga
      * work fine for ASCII characters (0x20..0x7e)

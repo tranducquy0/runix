@@ -30,6 +30,11 @@ unsafe extern "C" {
 
 #[unsafe(no_mangle)]
 extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
+    // Start from a clean slate: without this, whatever GRUB or the firmware
+    // left on screen (menu text, countdown characters) bleeds into the first
+    // line of kernel output.
+    drivers::output::vga::WRITER.lock().clear_screen();
+
     println!("Welcome to the R-Unix kernel");
 
     if multiboot_magic != multiboot2::BOOTLOADER_MAGIC {
