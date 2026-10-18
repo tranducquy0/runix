@@ -101,6 +101,14 @@ impl BootInformation {
                 break;
             }
 
+            // A zero-size tag cannot occur in a valid boot-info block and
+            // would make this walk spin forever (offset += 0). Guard against
+            // a malformed block: stop and report no memory map instead of
+            // hanging the whole boot.
+            if header.size == 0 {
+                break;
+            }
+
             offset += align_up(header.size as usize, 8);
         }
 

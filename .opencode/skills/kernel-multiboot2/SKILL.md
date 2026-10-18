@@ -23,7 +23,7 @@ GRUB -> _start (src/asm/boot.asm) -> kernel_main (src/main.rs)
 `kernel_main`:
 - Checks magic against `multiboot2::BOOTLOADER_MAGIC`; on mismatch prints and halts.
 - `BootInformation::load(info_addr)` — reads only the fixed header prefix to bound `total_size`, then the region `[start, end)` is walked for tags.
-- `memory_map_tag()` finds tag type `6`. Tags are 8-byte aligned after the header; stop at end tag (`typ == 0 && size == 8`) or block end.
+- `memory_map_tag()` finds tag type `6`. Tags are 8-byte aligned after the header; stop at end tag (`typ == 0 && size == 8`) or block end. A tag with `size == 0` is malformed (it would make the walk spin since `offset += 0`); the walker stops and reports no memory map instead of hanging the boot.
 
 ## Gotchas
 
