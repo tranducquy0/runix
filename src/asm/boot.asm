@@ -5,14 +5,14 @@
     .global boot_stack
     .global boot_stack_top
 boot_stack:
-    .skip 4096
+    .skip 32768
 boot_stack_top:
 
     .section .text
     .global _start
 _start:
     # GRUB arrives here with Multiboot2 values in eax/ebx but without a Rust ABI
-    # stack frame. Build a tiny stack and forward those values as C arguments.
+    # stack frame. Build a stack and forward those values as C arguments.
     mov esp, offset boot_stack_top
     push ebx
     push eax

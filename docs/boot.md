@@ -57,7 +57,10 @@ The first instructions executed live in [src/asm/boot.asm](../src/asm/boot.asm),
 
 The stub does three things:
 
-1. reserves a temporary 4 KiB boot stack in `.bss`
+1. reserves a temporary 32 KiB boot stack in `.bss` (grew from 4 KiB: the
+   debug-build `kernel_main` frame plus `println!` formatting machinery
+   overflows 4 KiB and corrupts/overruns the boot stack before any panic
+   handler could report it)
 2. sets `esp` to the top of that stack
 3. forwards `eax` and `ebx` to Rust using the C calling convention
 
