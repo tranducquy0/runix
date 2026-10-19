@@ -13,13 +13,37 @@ monitor_sock="$PWD/.run/vm-monitor.sock"
 run_dir=".run"
 image="runix.iso"
 
+cleanup_existing() {
+  if [[ -f "$run_dir/vm.pid" ]]; then
+    local pid
+    pid="$(cat "$run_dir/vm.pid" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "[*] Stopping existing VM (pid $pid)..."
+      if [[ -S "$monitor_sock" ]]; then
+        monitor_talk quit >/dev/null 2>&1 || true
+      fi
+      if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        local count=0
+        while kill -0 "$pid" 2>/dev/null && (( count < 20 )); do
+          sleep 0.1
+          (( count++ )) || true
+        done
+      fi
+    fi
+  elif [[ -S "$monitor_sock" ]]; then
+    monitor_talk quit >/dev/null 2>&1 || true
+  fi
+  rm -rf "$run_dir"
+}
+
 # Boot runix.iso headless in the background with a monitor on a unix socket.
 start() {
   if [[ ! -f "$image" ]]; then
     echo "vm.sh: missing $image, run 'make build && make iso build' first" >&2
     exit 1
   fi
-  rm -rf "$run_dir"
+  cleanup_existing
   mkdir -p "$run_dir"
   qemu-system-i386 \
     -cdrom "$image" \
@@ -40,7 +64,7 @@ serve() {
     echo "vm.sh: missing $image, run 'make build && make iso build' first" >&2
     exit 1
   fi
-  rm -rf "$run_dir"
+  cleanup_existing
   mkdir -p "$run_dir"
   exec qemu-system-i386 \
     -cdrom "$image" \
@@ -88,8 +112,12 @@ screen() {
   # Stop the CPU, dump the full 80x25 VGA text buffer, resume the VM.
   monitor_talk stop >/dev/null
   local dump
-  dump="$(monitor_talk 'xp /4000xb 0xb8000')"
-  monitor_talk cont >/dev/null
+  local dump_err=0
+  dump="$(monitor_talk 'xp /4000xb 0xb8000')" || dump_err=$?
+  monitor_talk cont >/dev/null || true
+  if [[ $dump_err -ne 0 ]]; then
+    exit $dump_err
+  fi
   python3 - "$dump" <<'EOF'
 import sys, re
 text = sys.argv[1]
@@ -116,11 +144,23 @@ EOF
 
 # Quit the VM via its monitor socket and drop the run dir.
 stop() {
-  [[ -S "$monitor_sock" ]] || {
-    echo "vm.sh: no monitor at $monitor_sock, run 'make vm agent' first" >&2
+  if [[ -f "$run_dir/vm.pid" ]]; then
+    local pid
+    pid="$(cat "$run_dir/vm.pid" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      if [[ -S "$monitor_sock" ]]; then
+        monitor_talk quit >/dev/null 2>&1 || true
+      fi
+      if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+      fi
+    fi
+  elif [[ -S "$monitor_sock" ]]; then
+    monitor_talk quit >/dev/null 2>&1 || true
+  else
+    echo "vm.sh: no monitor at $monitor_sock or running VM found" >&2
     exit 1
-  }
-  monitor_talk quit >/dev/null 2>&1 || true
+  fi
   rm -rf "$run_dir"
   echo "[*] VM stopped"
 }

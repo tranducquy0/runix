@@ -116,3 +116,60 @@ fn end_tag_is_honored() {
 fn bootloader_magic_constant_matches_spec() {
     assert_eq!(BOOTLOADER_MAGIC, 0x36d7_6289);
 }
+
+#[test]
+fn non_24_byte_entry_size_returns_none() {
+    let mut block = Vec::new();
+    let tag_size = 16 + 28; // Header + 1 entry of 28 bytes
+    let total = 8 + tag_size + 8;
+
+    block.extend_from_slice(&(total as u32).to_le_bytes());
+    block.extend_from_slice(&0u32.to_le_bytes());
+
+    block.extend_from_slice(&6u32.to_le_bytes()); // Memory map tag
+    block.extend_from_slice(&(tag_size as u32).to_le_bytes());
+    block.extend_from_slice(&28u32.to_le_bytes()); // entry_size != 24
+    block.extend_from_slice(&0u32.to_le_bytes());
+
+    // 28 dummy bytes
+    block.extend_from_slice(&[0u8; 28]);
+
+    block.extend_from_slice(&0u32.to_le_bytes()); // End tag
+    block.extend_from_slice(&8u32.to_le_bytes());
+
+    let info = boot_info_from_block(&block);
+    assert!(info.memory_map_tag().is_none());
+}
+
+#[test]
+fn tag_size_smaller_than_header_returns_none() {
+    let mut block = Vec::new();
+    let total = 8 + 8 + 8; // Header + malformed tag + end tag
+
+    block.extend_from_slice(&(total as u32).to_le_bytes());
+    block.extend_from_slice(&0u32.to_le_bytes());
+
+    block.extend_from_slice(&6u32.to_le_bytes()); // Memory map tag
+    block.extend_from_slice(&4u32.to_le_bytes()); // Invalid tag size < 8 (TagHeader) or < 16 (MemoryMapTagHeader)
+
+    block.extend_from_slice(&0u32.to_le_bytes()); // End tag
+    block.extend_from_slice(&8u32.to_le_bytes());
+
+    let info = boot_info_from_block(&block);
+    assert!(info.memory_map_tag().is_none());
+}
+
+#[test]
+fn tag_extending_past_end_returns_none() {
+    let mut block = Vec::new();
+    let total = 8 + 16 + 8; // Advertised total size
+
+    block.extend_from_slice(&(total as u32).to_le_bytes());
+    block.extend_from_slice(&0u32.to_le_bytes());
+
+    block.extend_from_slice(&6u32.to_le_bytes()); // Memory map tag
+    block.extend_from_slice(&100u32.to_le_bytes()); // Advertised tag size extends past block end
+
+    let info = boot_info_from_block(&block);
+    assert!(info.memory_map_tag().is_none());
+}
