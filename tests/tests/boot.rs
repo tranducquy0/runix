@@ -173,3 +173,13 @@ fn tag_extending_past_end_returns_none() {
     let info = boot_info_from_block(&block);
     assert!(info.memory_map_tag().is_none());
 }
+
+#[test]
+fn multiboot_header_layout_and_alignment() {
+    use runix_tests::subs::boot::multiboot2::{MultibootHeader, Multiboot2Header, MULTIBOOT2_HEADER_LENGTH};
+
+    assert_eq!(core::mem::size_of::<MultibootHeader>(), 40);
+    assert_eq!(core::mem::align_of::<MultibootHeader>(), 8);
+    assert_eq!(core::mem::size_of::<Multiboot2Header>(), MULTIBOOT2_HEADER_LENGTH as usize);
+    assert_eq!(core::mem::align_of::<Multiboot2Header>(), 8);
+}
