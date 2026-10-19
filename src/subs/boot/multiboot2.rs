@@ -43,7 +43,6 @@ pub struct MultibootHeader {
     pub data: [u8; MULTIBOOT2_HEADER_LENGTH as usize],
 }
 
-#[allow(dead_code)]
 pub type Multiboot2Header = MultibootHeader;
 
 /// Tag type of the memory-map (e820-style) tag.

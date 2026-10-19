@@ -24,7 +24,10 @@ mod drivers;
 
 // core subsystems
 mod subs;
-use subs::boot::multiboot2::{self, BootInformation, MultibootHeader, CHECKSUM};
+use subs::boot::multiboot2::{
+    self, BootInformation, Multiboot2Header, CHECKSUM, MULTIBOOT2_ARCHITECTURE_I386,
+    MULTIBOOT2_HEADER_LENGTH, MULTIBOOT2_HEADER_MAGIC,
+};
 use subs::mem::{BootMemoryMap, FrameAllocator, ReservedRange};
 
 // Keep the boot stub in assembly so the exact register/stack handoff from GRUB
@@ -165,13 +168,22 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
 #[unsafe(link_section = ".multiboot2")]
 #[used]
 #[unsafe(no_mangle)]
-static MULTIBOOT2_HEADER: MultibootHeader = MultibootHeader {
+static MULTIBOOT2_HEADER: Multiboot2Header = Multiboot2Header {
     data: [
         // Standard Multiboot2 header prologue: magic, architecture, size,
         // then a checksum that makes the 32-bit sum of these fields equal zero.
-        0xd6, 0x50, 0x52, 0xe8, // magic
-        0x00, 0x00, 0x00, 0x00, // architecture
-        0x28, 0x00, 0x00, 0x00, // header length = 40
+        MULTIBOOT2_HEADER_MAGIC.to_le_bytes()[0],
+        MULTIBOOT2_HEADER_MAGIC.to_le_bytes()[1],
+        MULTIBOOT2_HEADER_MAGIC.to_le_bytes()[2],
+        MULTIBOOT2_HEADER_MAGIC.to_le_bytes()[3],
+        MULTIBOOT2_ARCHITECTURE_I386.to_le_bytes()[0],
+        MULTIBOOT2_ARCHITECTURE_I386.to_le_bytes()[1],
+        MULTIBOOT2_ARCHITECTURE_I386.to_le_bytes()[2],
+        MULTIBOOT2_ARCHITECTURE_I386.to_le_bytes()[3],
+        MULTIBOOT2_HEADER_LENGTH.to_le_bytes()[0],
+        MULTIBOOT2_HEADER_LENGTH.to_le_bytes()[1],
+        MULTIBOOT2_HEADER_LENGTH.to_le_bytes()[2],
+        MULTIBOOT2_HEADER_LENGTH.to_le_bytes()[3],
         (CHECKSUM & 0xff) as u8,
         ((CHECKSUM >> 8) & 0xff) as u8,
         ((CHECKSUM >> 16) & 0xff) as u8,

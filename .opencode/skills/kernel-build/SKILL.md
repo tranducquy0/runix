@@ -26,13 +26,9 @@ It does not use a prebuilt std. It calls `cargo +nightly` with:
 - Output: `target/i686-runix-target/debug/runix`.
 - Linker script: `scripts/linker.ld` (via `.cargo/config.toml` `rustflags`).
 
-## Linker gotcha
+## Linker configuration
 
-The target spec sets `"linker": "ld.lld"`. If `ld.lld` is not on PATH, link fails with `linker ld.lld not found` even though compilation succeeds. The Rust toolchain ships `rust-lld`; override without editing config:
-
-```
-export CARGO_TARGET_I686_RUNIX_TARGET_LINKER=$(ls ~/.rustup/toolchains/nightly-*/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld | head -1)
-```
+The target spec sets `"linker-flavor": "gnu-lld"` and `"linker": "rust-lld"`, using the LLD linker bundled directly with the Rust toolchain.
 
 ## What `make iso test` checks
 
