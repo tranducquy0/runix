@@ -6,7 +6,8 @@ description: Boot memory map and physical frame allocator invariants for runix. 
 ## Layout
 
 - `src/subs/mem/mod.rs` — `BootMemoryMap`, `MemoryRegion`, `ReservedRange`, constants.
-- `src/subs/mem/allocator.rs` — `FrameAllocator`.
+- `src/subs/mem/reusables.rs` — `FrameAllocator` struct, tracking limits, shared `FRAME_BITMAP`.
+- `src/subs/mem/operators.rs` — the `impl FrameAllocator` (`new`/`alloc`/`free`/counters).
 
 No heap/allocator crate exists yet. Everything is `no_std`, fixed-capacity, and runs before any paging.
 

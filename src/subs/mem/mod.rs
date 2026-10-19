@@ -22,7 +22,11 @@
 // - Reservation alignment only ever *shrinks* usable regions, so a frame
 //   partially covered by a reserved range is never handed out.
 
-pub mod allocator;
+pub mod reusables;
+pub mod operators;
+
+//(re-exported so callers keep a short `mem::FrameAllocator` path)
+pub use self::reusables::FrameAllocator;
 
 use crate::subs::boot::multiboot2::MemoryArea;
 
