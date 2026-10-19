@@ -1,4 +1,4 @@
-//! Tests for the frame allocator (`src/subs/mem/allocator.rs`).
+//! Tests for the frame allocator (`src/subs/mem/reusables.rs` + `operators.rs`).
 //!
 //! Everything lives in ONE test function on purpose: the allocator keeps its
 //! bitmap in a shared static (single boot-time instance inside the kernel),
@@ -6,7 +6,7 @@
 //! test, sequentially.
 
 use runix_tests::subs::boot::multiboot2::MemoryArea;
-use runix_tests::subs::mem::allocator::FrameAllocator;
+use runix_tests::subs::mem::FrameAllocator;
 use runix_tests::subs::mem::{BootMemoryMap, FRAME_SIZE};
 use runix_tests::testutil::{memory_areas, TYPE_AVAILABLE};
 

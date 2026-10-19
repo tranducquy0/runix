@@ -25,7 +25,7 @@ mod drivers;
 // core subsystems
 mod subs;
 use subs::boot::multiboot2::{self, BootInformation};
-use subs::mem::{allocator::FrameAllocator, BootMemoryMap, ReservedRange};
+use subs::mem::{BootMemoryMap, FrameAllocator, ReservedRange};
 
 // Keep the boot stub in assembly so the exact register/stack handoff from GRUB
 // stays explicit and easy to compare against the Multiboot2 spec.

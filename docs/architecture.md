@@ -13,7 +13,8 @@ src/
 ├── subs/                    core subsystems
 │   ├── boot/multiboot2.rs   Multiboot2 boot-info parser (header + tag walking)
 │   ├── mem/mod.rs           boot memory map, reserved-range filtering
-│   ├── mem/allocator.rs     physical frame allocator (bitmap-backed)
+│   ├── mem/reusables.rs      frame allocator definitions (bitmap, struct)
+│   ├── mem/operators.rs      frame allocator operators (new/alloc/free)
 │   └── handlers/panic.rs    panic handler
 └── drivers/                 hardware drivers
     ├── output/vga.rs        VGA text driver + print!/println! macros
@@ -48,7 +49,8 @@ have. See [boot.md](boot.md) for the entry contract and tag format.
   rather than truncating.
 - `ReservedRange` / `BootMemoryMap::reserve` — carves ranges that are already in use
   out of the map, splitting regions as needed so the allocator never sees them.
-- `FrameAllocator` (`allocator.rs`) — a bitmap-backed physical frame allocator over the
+- `FrameAllocator` (`reusables.rs` + `operators.rs`) — a bitmap-backed physical frame
+  allocator over the
   reserved-filtered map. One bit per 4 KiB frame, tracking up to `MAX_TRACKED_FRAMES`
   (256 MiB of RAM); `new()` returns `None` instead of truncating when the map exceeds
   that. `alloc()` / `free()` validate alignment and region ownership, so double-free is
