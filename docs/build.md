@@ -59,12 +59,6 @@ make help       # list all targets
   crate under [`tests/`](../tests), which re-exposes the kernel's logic modules on the
   host triple.
 
-## Linker gotcha
+## Linker configuration
 
-The target spec sets `"linker": "ld.lld"`. If `ld.lld` is not on PATH the link fails
-with `linker ld.lld not found` even though compilation succeeded. The Rust toolchain
-ships `rust-lld`; override without editing config:
-
-```bash
-export CARGO_TARGET_I686_RUNIX_TARGET_LINKER=$(ls ~/.rustup/toolchains/nightly-*/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld | head -1)
-```
+The target spec sets `"linker-flavor": "gnu-lld"` and `"linker": "rust-lld"`, using the LLD linker bundled directly with the Rust toolchain so no system `ld.lld` binary or PATH overrides are required.

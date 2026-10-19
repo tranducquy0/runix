@@ -9,7 +9,7 @@
 //!    small alloc/free smoke test exercises the bitmap.
 //! 4. Everything halts in `loop {}` — no interrupts or scheduling yet.
 //!
-//! The Multiboot2 header itself lives at the bottom of this file in
+//! The Multiboot2 header static itself lives at the bottom of this file in
 //! `.multiboot2` so GRUB can find it within the image's first 32 KiB.
 
 // disable normal features that can't build a kernel
@@ -24,7 +24,10 @@ mod drivers;
 
 // core subsystems
 mod subs;
-use subs::boot::multiboot2::{self, BootInformation};
+use subs::boot::multiboot2::{
+    self, BootInformation, Multiboot2Header, CHECKSUM, MULTIBOOT2_ARCHITECTURE_I386,
+    MULTIBOOT2_HEADER_LENGTH, MULTIBOOT2_HEADER_MAGIC,
+};
 use subs::mem::{BootMemoryMap, FrameAllocator, ReservedRange};
 
 // Keep the boot stub in assembly so the exact register/stack handoff from GRUB
@@ -162,39 +165,25 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
     loop {}
 }
 
-// Multiboot2 header constants: 32-bit sum of magic/arch/len/checksum must be zero.
-const MULTIBOOT2_HEADER_MAGIC: u32 = 0xE85250D6;
-const MULTIBOOT2_ARCHITECTURE_I386: u32 = 0;
-const MULTIBOOT2_HEADER_LENGTH: u32 = 40;
-const CHECKSUM: u32 = (0u32).wrapping_sub(
-    MULTIBOOT2_HEADER_MAGIC + MULTIBOOT2_ARCHITECTURE_I386 + MULTIBOOT2_HEADER_LENGTH,
-);
-
-
-/// Raw 40-byte Multiboot2 header placed in `.multiboot2` by the linker.
-///
-/// GRUB scans the image's first 32 KiB for this structure; its byte array
-/// encodes magic + architecture + length + checksum, an information-request
-/// tag asking for the memory map (tag 6), and the required end tag. All
-/// fields are literal bytes so GRUB sees exactly the on-disk layout the
-/// spec demands, independent of Rust layout rules.
-#[repr(C, align(8))]
-struct MultibootHeader {
-    // Raw bytes avoid Rust layout surprises in a format where GRUB expects
-    // exact offsets and exact alignment.
-    data: [u8; MULTIBOOT2_HEADER_LENGTH as usize],
-}
-
 #[unsafe(link_section = ".multiboot2")]
 #[used]
 #[unsafe(no_mangle)]
-static MULTIBOOT2_HEADER: MultibootHeader = MultibootHeader {
+static MULTIBOOT2_HEADER: Multiboot2Header = Multiboot2Header {
     data: [
         // Standard Multiboot2 header prologue: magic, architecture, size,
         // then a checksum that makes the 32-bit sum of these fields equal zero.
-        0xd6, 0x50, 0x52, 0xe8, // magic
-        0x00, 0x00, 0x00, 0x00, // architecture
-        0x28, 0x00, 0x00, 0x00, // header length = 40
+        MULTIBOOT2_HEADER_MAGIC.to_le_bytes()[0],
+        MULTIBOOT2_HEADER_MAGIC.to_le_bytes()[1],
+        MULTIBOOT2_HEADER_MAGIC.to_le_bytes()[2],
+        MULTIBOOT2_HEADER_MAGIC.to_le_bytes()[3],
+        MULTIBOOT2_ARCHITECTURE_I386.to_le_bytes()[0],
+        MULTIBOOT2_ARCHITECTURE_I386.to_le_bytes()[1],
+        MULTIBOOT2_ARCHITECTURE_I386.to_le_bytes()[2],
+        MULTIBOOT2_ARCHITECTURE_I386.to_le_bytes()[3],
+        MULTIBOOT2_HEADER_LENGTH.to_le_bytes()[0],
+        MULTIBOOT2_HEADER_LENGTH.to_le_bytes()[1],
+        MULTIBOOT2_HEADER_LENGTH.to_le_bytes()[2],
+        MULTIBOOT2_HEADER_LENGTH.to_le_bytes()[3],
         (CHECKSUM & 0xff) as u8,
         ((CHECKSUM >> 8) & 0xff) as u8,
         ((CHECKSUM >> 16) & 0xff) as u8,

@@ -5,7 +5,7 @@ description: Multiboot2 boot flow for runix — header, GRUB handoff, and boot-i
 
 ## Two separate Multiboot2 pieces
 
-1. **Header** (what GRUB scans for in the image) — in `src/main.rs`. Constants: `MULTIBOOT2_HEADER_MAGIC = 0xE85250D6`, arch `0` (i386), length `40`, plus a `CHECKSUM` so `magic + arch + len + checksum == 0`. Emitted as a `#[repr(C, align(8))]` `MultibootHeader` of raw bytes to guarantee exact offsets/alignment GRUB expects. Do not let the compiler reorder or pad it.
+1. **Header** (what GRUB scans for in the image) — defined in `src/subs/boot/multiboot2.rs` (`MultibootHeader` / `Multiboot2Header`) and instantiated as a static in `src/main.rs`. Constants: `MULTIBOOT2_HEADER_MAGIC = 0xE85250D6`, arch `0` (i386), length `40`, plus a `CHECKSUM` so `magic + arch + len + checksum == 0`. Emitted as a `#[repr(C, align(8))]` struct of raw bytes to guarantee exact offsets/alignment GRUB expects. Do not let the compiler reorder or pad it.
 
 2. **Boot-info parser** (what GRUB hands us at runtime) — `src/subs/boot/multiboot2.rs`. Validates `BOOTLOADER_MAGIC = 0x36d7_6289` and walks tags.
 

@@ -1,6 +1,8 @@
 //! Tests for the Multiboot2 boot-info parser (`src/subs/boot/multiboot2.rs`).
 
-use runix_tests::subs::boot::multiboot2::BOOTLOADER_MAGIC;
+use runix_tests::subs::boot::multiboot2::{
+    BOOTLOADER_MAGIC, Multiboot2Header, MULTIBOOT2_HEADER_LENGTH,
+};
 use runix_tests::testutil::{boot_info_from_block, multiboot2_with_memory_map, TYPE_AVAILABLE};
 
 // A well-formed block with two available areas parses entry-for-entry.
@@ -172,4 +174,10 @@ fn tag_extending_past_end_returns_none() {
 
     let info = boot_info_from_block(&block);
     assert!(info.memory_map_tag().is_none());
+}
+
+#[test]
+fn multiboot_header_layout_and_alignment() {
+    assert_eq!(core::mem::size_of::<Multiboot2Header>(), MULTIBOOT2_HEADER_LENGTH as usize);
+    assert_eq!(core::mem::align_of::<Multiboot2Header>(), 8);
 }
