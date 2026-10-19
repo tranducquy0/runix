@@ -5,11 +5,21 @@ KERNEL_NAME=rkrnl
 .PHONY: build iso vm tests run clean help
 
 # Subcommand helpers: `make iso test`, `make iso build`, `make vm launch`...
-# The second word of MAKECMDGOALS is the subcommand; read it into $(SUB) here
-# (the swallowing rule for it lives at the bottom of this file).
+# The second word of MAKECMDGOALS is the subcommand; read it into $(SUB) here.
 SUB=$(word 2,$(MAKECMDGOALS))
+IS_SUBCOMMAND_GOAL=$(filter iso vm,$(firstword $(MAKECMDGOALS)))
+
+# Swallow the subcommand goal (`make iso test` -> `test`) so make does not
+# resolve it via its own rules.
+ifneq ($(IS_SUBCOMMAND_GOAL),)
+ifneq ($(SUB),)
+.PHONY: $(SUB)
+$(SUB): ;@:
+endif
+endif
 
 # Compile the freestanding i686 kernel (build-std, custom target spec).
+ifeq ($(IS_SUBCOMMAND_GOAL),)
 build:
 	@echo "[*] building..."
 	@cargo +nightly build \
@@ -17,6 +27,7 @@ build:
 	-Z build-std-features=compiler-builtins-mem \
 	-Z json-target-spec
 	@echo "[*] done!"
+endif
 
 iso:
 	@test -n "$(SUB)" || { echo "usage: make iso test|build"; exit 1; }
@@ -60,13 +71,3 @@ help:
 	 run: alias of vm launch\n\
 	 clean: cleanup"
 
-# Swallow the subcommand goal (`make iso test` -> `test`) so make does not
-# resolve it via its own rules. This must live last: a recipe here overrides
-# real targets that share a name (e.g. `build`), otherwise `make iso build`
-# would also kick off the kernel build in the wrong order.
-ifeq ($(filter iso vm,$(firstword $(MAKECMDGOALS))),$(firstword $(MAKECMDGOALS)))
-ifneq ($(SUB),)
-.PHONY: $(SUB)
-$(SUB): ;@:
-endif
-endif

@@ -108,9 +108,10 @@ impl BootInformation {
         // This pointer is bootloader-owned. Read only the fixed-size prefix here
         // so later parsing can stay bounded by the advertised total size.
         let header = unsafe { &*(addr as *const BootInformationHeader) };
+        let end = addr.checked_add(header.total_size as usize).unwrap_or(addr);
         Self {
             start: addr,
-            end: addr + header.total_size as usize,
+            end,
         }
     }
 
@@ -128,16 +129,43 @@ impl BootInformation {
     pub fn memory_map_tag(&self) -> Option<MemoryMapTag<'_>> {
         // After the boot-info header, tags are stored back-to-back with 8-byte
         // padding between them. We stop at the end tag or when the block ends.
-        let mut offset = self.start + mem::size_of::<BootInformationHeader>();
+        let mut offset = self.start.checked_add(mem::size_of::<BootInformationHeader>())?;
 
-        while offset < self.end {
+        while offset.checked_add(mem::size_of::<TagHeader>())? <= self.end {
             let header = unsafe { &*(offset as *const TagHeader) };
 
+            // Tag size must at least cover its own TagHeader (8 bytes).
+            if (header.size as usize) < mem::size_of::<TagHeader>() {
+                break;
+            }
+
+            let tag_size = header.size as usize;
+            let tag_end = offset.checked_add(tag_size)?;
+            if tag_end > self.end {
+                break;
+            }
+
             if header.typ == MEMORY_MAP_TAG_TYPE {
+                // Must be at least large enough for the MemoryMapTagHeader (16 bytes).
+                if tag_size < mem::size_of::<MemoryMapTagHeader>() {
+                    break;
+                }
                 let tag = unsafe { &*(offset as *const MemoryMapTagHeader) };
-                let entries_offset = offset + mem::size_of::<MemoryMapTagHeader>();
-                let entries_size = header.size as usize - mem::size_of::<MemoryMapTagHeader>();
-                let entry_count = entries_size / tag.entry_size as usize;
+
+                // Currently only 24-byte entries matching MemoryArea layout are supported.
+                if tag.entry_size as usize != mem::size_of::<MemoryArea>() {
+                    break;
+                }
+
+                let entries_offset = offset.checked_add(mem::size_of::<MemoryMapTagHeader>())?;
+                let entries_size = tag_size - mem::size_of::<MemoryMapTagHeader>();
+                let entry_count = entries_size / (tag.entry_size as usize);
+
+                let entries_bytes = entry_count.checked_mul(mem::size_of::<MemoryArea>())?;
+                let entries_end = entries_offset.checked_add(entries_bytes)?;
+                if entries_end > self.end {
+                    break;
+                }
 
                 return Some(MemoryMapTag {
                     // The parser stays zero-copy here. Higher layers can copy
@@ -153,15 +181,13 @@ impl BootInformation {
                 break;
             }
 
-            // A zero-size tag cannot occur in a valid boot-info block and
-            // would make this walk spin forever (offset += 0). Guard against
-            // a malformed block: stop and report no memory map instead of
-            // hanging the whole boot.
-            if header.size == 0 {
+            let aligned_size = checked_align_up(tag_size, 8)?;
+            let next_offset = offset.checked_add(aligned_size)?;
+            if next_offset <= offset {
                 break;
             }
 
-            offset += align_up(header.size as usize, 8);
+            offset = next_offset;
         }
 
         None
@@ -188,7 +214,8 @@ impl<'a> MemoryMapTag<'a> {
     }
 }
 
-// Round `value` up to the next multiple of `align` (a power of two).
-const fn align_up(value: usize, align: usize) -> usize {
-    (value + align - 1) & !(align - 1)
+// Round `value` up to the next multiple of `align` (a power of two), checking for overflow.
+fn checked_align_up(value: usize, align: usize) -> Option<usize> {
+    let extended = value.checked_add(align - 1)?;
+    Some(extended & !(align - 1))
 }

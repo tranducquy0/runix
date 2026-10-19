@@ -58,6 +58,21 @@ fn empty_len_area_is_dropped() {
 }
 
 #[test]
+fn sub_frame_available_area_is_skipped() {
+    // Available region (0x100001, 0x10) yields start=0x101000 > end=0x100000 after align_to_frames.
+    // It should be safely skipped rather than returning None.
+    let map = map_from(&[
+        (0x0010_0001, 0x0000_0010, TYPE_AVAILABLE),
+        (0x0020_0000, 0x0010_0000, TYPE_AVAILABLE),
+    ])
+    .unwrap();
+
+    let regions = map.regions();
+    assert_eq!(regions.len(), 1);
+    assert_eq!(regions[0].start(), 0x0020_0000);
+}
+
+#[test]
 fn capacity_is_loud_failure() {
     // More usable areas than MAX_MEMORY_REGIONS must return None, not
     // silently truncate the boot map.

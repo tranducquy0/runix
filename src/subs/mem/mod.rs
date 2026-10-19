@@ -161,6 +161,9 @@ impl BootMemoryMap {
             // the frame allocator only hands out whole 4 KiB pages. Aligning the
             // regions here keeps all later code working with the same contract.
             let region = MemoryRegion::new(start, end).align_to_frames();
+            if region.is_empty() {
+                continue;
+            }
             if !map.push(region) {
                 // Failing loudly is better than silently truncating the boot map.
                 return None;
