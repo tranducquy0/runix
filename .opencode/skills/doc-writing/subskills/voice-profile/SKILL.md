@@ -94,7 +94,7 @@ Same author, three registers:
    that's next."
 2. **Developer guide:** "Run `make build`, then `make iso test` before `make iso build` —
    the validation script needs `readelf` and `grub-file` on PATH. If linking fails with
-   `linker ld.lld not found` (resolved by using bundled `rust-lld`), export `CARGO_TARGET_I686_RUNIX_TARGET_LINKER` pointing at
+   `linker ld.lld not found`, export `CARGO_TARGET_I686_RUNIX_TARGET_LINKER` pointing at
    the toolchain's `rust-lld`."
 3. **Architecture doc:** "The frame allocator owns physical frames over the
    reserved-filtered boot map. RAM is never assumed contiguous: regions come from the

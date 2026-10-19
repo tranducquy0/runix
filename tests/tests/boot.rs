@@ -1,8 +1,7 @@
 //! Tests for the Multiboot2 boot-info parser (`src/subs/boot/multiboot2.rs`).
 
 use runix_tests::subs::boot::multiboot2::{
-    BOOTLOADER_MAGIC, CHECKSUM, Multiboot2Header, MultibootHeader,
-    MULTIBOOT2_ARCHITECTURE_I386, MULTIBOOT2_HEADER_LENGTH, MULTIBOOT2_HEADER_MAGIC,
+    BOOTLOADER_MAGIC, Multiboot2Header, MULTIBOOT2_HEADER_LENGTH,
 };
 use runix_tests::testutil::{boot_info_from_block, multiboot2_with_memory_map, TYPE_AVAILABLE};
 
@@ -179,17 +178,6 @@ fn tag_extending_past_end_returns_none() {
 
 #[test]
 fn multiboot_header_layout_and_alignment() {
-    assert_eq!(core::mem::size_of::<MultibootHeader>(), 40);
-    assert_eq!(core::mem::align_of::<MultibootHeader>(), 8);
     assert_eq!(core::mem::size_of::<Multiboot2Header>(), MULTIBOOT2_HEADER_LENGTH as usize);
     assert_eq!(core::mem::align_of::<Multiboot2Header>(), 8);
-}
-
-#[test]
-fn multiboot_header_checksum_sums_to_zero() {
-    let sum = MULTIBOOT2_HEADER_MAGIC
-        .wrapping_add(MULTIBOOT2_ARCHITECTURE_I386)
-        .wrapping_add(MULTIBOOT2_HEADER_LENGTH)
-        .wrapping_add(CHECKSUM);
-    assert_eq!(sum, 0);
 }

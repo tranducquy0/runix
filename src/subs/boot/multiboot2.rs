@@ -37,13 +37,12 @@ pub const CHECKSUM: u32 = (0u32).wrapping_sub(
 /// fields are literal bytes so GRUB sees exactly the on-disk layout the
 /// spec demands, independent of Rust layout rules.
 #[repr(C, align(8))]
-pub struct MultibootHeader {
+pub struct Multiboot2Header {
     // Raw bytes avoid Rust layout surprises in a format where GRUB expects
     // exact offsets and exact alignment.
     pub data: [u8; MULTIBOOT2_HEADER_LENGTH as usize],
 }
 
-pub type Multiboot2Header = MultibootHeader;
 
 /// Tag type of the memory-map (e820-style) tag.
 const MEMORY_MAP_TAG_TYPE: u32 = 6;
