@@ -17,6 +17,7 @@ it idles — no scheduler, userspace, filesystem, interrupts, or paging yet.
 ## Quick start
 
 ```bash
+make setup android|arch  # first-time setup: install the toolchain (Termux / Arch)
 make build      # compile the kernel (cargo +nightly, custom i686 target)
 make iso test   # validate the image is ELF + Multiboot2-compliant
 make iso build  # pack iso/ into runix.iso (grub-mkrescue)

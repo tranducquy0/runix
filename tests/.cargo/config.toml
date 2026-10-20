@@ -1,4 +1,8 @@
 [build]
 # The repo root config defaults to the i686 kernel target; the host tests need
 # the normal host triple instead. Deeper config wins, so this overrides it.
+# `make tests` passes --target explicitly (CLI beats this file) so it follows
+# the actual host — e.g. aarch64-linux-android on Termux, not a hardcoded
+# x86_64 triple. This value is the fallback for raw `cd tests && cargo test`
+# on a plain x86_64 Linux host.
 target = "x86_64-unknown-linux-gnu"

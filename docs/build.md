@@ -8,10 +8,21 @@
 - `qemu-system-i386` — running the ISO.
 - `python3` — the `vm screen` / `vm stop` monitor helpers decode QEMU's replies with it.
 
+On Termux (Android) or Arch Linux, `make setup android|arch`
+([scripts/setup.sh](../scripts/setup.sh)) installs all of the above. Platform caveats
+it can't paper over:
+
+- Termux has no rustup package: `make build` detects that and uses the distro stable
+  rustc with `RUSTC_BOOTSTRAP=1` plus the `rust-src` package instead of
+  `cargo +nightly`. Same `-Z` flags, same kernel.
+- Termux has no grub package: `make iso test` / `make iso build` (grub-file,
+  grub-mkrescue) and anything that boots `runix.iso` need another machine. On-device
+  you get `make build` and `make tests`.
+
 ## Build, validate, run
 
 ```bash
-make build      # compile the kernel with cargo +nightly (custom target i686-runix-target)
+make build      # compile the kernel (cargo +nightly, or the RUSTC_BOOTSTRAP fallback above)
 make iso test   # validate the image is ELF and Multiboot2-compliant
 make iso build  # copy the kernel into iso/boot/rkrnl, pack runix.iso with grub-mkrescue
 make run        # boot runix.iso in QEMU (qemu-system-i386 -cdrom runix.iso, GTK window)

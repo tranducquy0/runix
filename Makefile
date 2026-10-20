@@ -2,12 +2,12 @@ TGT=i686-runix-target
 QEMU_TGT=i386
 KERNEL_NAME=rkrnl
 
-.PHONY: build iso vm tests run clean help
+.PHONY: build iso vm setup tests run clean help
 
 # Subcommand helpers: `make iso test`, `make iso build`, `make vm launch`...
 # The second word of MAKECMDGOALS is the subcommand; read it into $(SUB) here.
 SUB=$(word 2,$(MAKECMDGOALS))
-IS_SUBCOMMAND_GOAL=$(filter iso vm,$(firstword $(MAKECMDGOALS)))
+IS_SUBCOMMAND_GOAL=$(filter iso vm setup,$(firstword $(MAKECMDGOALS)))
 
 # Swallow the subcommand goal (`make iso test` -> `test`) so make does not
 # resolve it via its own rules.
@@ -18,11 +18,20 @@ $(SUB): ;@:
 endif
 endif
 
+# Prefer rustup's nightly. Termux has no rustup package, so fall back to the
+# distro stable rustc: the rust-src package + RUSTC_BOOTSTRAP=1 builds the
+# same kernel with the same -Z flags.
+ifneq ($(shell command -v rustup 2>/dev/null),)
+CARGO_BUILD = cargo +nightly build
+else
+CARGO_BUILD = RUSTC_BOOTSTRAP=1 cargo build
+endif
+
 # Compile the freestanding i686 kernel (build-std, custom target spec).
 ifeq ($(IS_SUBCOMMAND_GOAL),)
 build:
 	@echo "[*] building..."
-	@cargo +nightly build \
+	@$(CARGO_BUILD) \
 	-Z build-std=core \
 	-Z build-std-features=compiler-builtins-mem \
 	-Z json-target-spec
@@ -37,10 +46,15 @@ vm:
 	@test -n "$(SUB)" || { echo "usage: make vm launch|agent|screen|stop"; exit 1; }
 	@bash scripts/vm.sh "$(SUB)"
 
-# Run the host-side kernel module tests (tests/ crate, host triple).
+setup:
+	@test -n "$(SUB)" || { echo "usage: make setup android|arch"; exit 1; }
+	@bash scripts/setup.sh "$(SUB)"
+
+# Run the host-side kernel module tests (tests/ crate). --target follows the
+# real host triple (CLI overrides the tests/.cargo/config.toml fallback).
 tests:
 	@echo "[*] running kernel module tests on host..."
-	@cd tests && cargo test
+	@cd tests && cargo test --target "$$(rustc -vV | sed -n 's/^host: //p')"
 
 # Boot runix.iso in QEMU with a visible GTK window.
 run:
@@ -67,6 +81,7 @@ help:
 	 vm agent: boot headless with a monitor socket for agent use\n\
 	 vm screen: dump the VM's VGA text via the monitor socket\n\
 	 vm stop: stop the agent VM\n\
+	 setup android|arch: install dev dependencies (Termux / Arch Linux)\n\
 	 tests: run the host-side kernel module tests\n\
 	 run: alias of vm launch\n\
 	 clean: cleanup"

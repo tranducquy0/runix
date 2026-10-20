@@ -19,8 +19,9 @@ it needs design decisions that touch the boot path and the allocator.
 ## Requirements
 
 Rust **nightly**, `grub-mkrescue` + `grub-file`, `readelf`, `qemu-system-i386`, and
-`python3` (the `vm screen`/`vm stop` monitor helpers). Details and why each one exists:
-[docs/build.md](docs/build.md).
+`python3` (the `vm screen`/`vm stop` monitor helpers). On Termux or Arch, run
+`make setup android|arch` — it installs the toolchain. Details and why each piece
+exists: [docs/build.md](docs/build.md).
 
 There is no build/test CI — verification happens on your machine, and the PR has to
 carry the evidence.

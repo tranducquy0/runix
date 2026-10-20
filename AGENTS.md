@@ -1,7 +1,8 @@
 # AGENTS.md
 
 ## Commands (exact)
-- `make build` — build kernel via `cargo +nightly` with `-Z build-std=core -Z build-std-features=compiler-builtins-mem -Z json-target-spec` for target `i686-runix-target`. Outputs `target/i686-runix-target/debug/runix`.
+- `make build` — build kernel via `cargo +nightly` with `-Z build-std=core -Z build-std-features=compiler-builtins-mem -Z json-target-spec` for target `i686-runix-target`. Outputs `target/i686-runix-target/debug/runix`. On systems without rustup (Termux) the Makefile falls back to `RUSTC_BOOTSTRAP=1 cargo build` with the distro stable + rust-src.
+- `make setup android|arch` — install the dev toolchain (dispatcher: `scripts/setup.sh`; Termux via `pkg`, Arch via `pacman` + rustup nightly).
 - `make iso build` — copies kernel to `iso/boot/rkrnl` and runs `grub-mkrescue -o runix.iso iso/` (dispatcher: `scripts/iso.sh`; does not rebuild the kernel by itself).
 - `make run` — boots ISO in QEMU with a visible GTK window.
 - `make iso test` — validates kernel image via `scripts/kernel_image.sh` (checks ELF with `readelf` and Multiboot2 with `grub-file --is-x86-multiboot2`). Must have both tools installed.
