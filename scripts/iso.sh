@@ -29,9 +29,12 @@ have_vendored_grub() {
 }
 
 # Run a vendored grub binary through the glibc loader with the vendored libs.
+# Termux's glibc loader and its libc are also required; include them in the path.
 grub_run() {
-  "$grub_tools/ld-linux-aarch64.so.1" --library-path "$grub_tools/lib" \
-    "$grub_tools/bin/$1" "${@:2}"
+  local glibc_lib="${PREFIX:-/data/data/com.termux/files/usr}/glibc/lib"
+  local lp="$grub_tools/lib"
+  [[ -d "$glibc_lib" ]] && lp="$lp:$glibc_lib"
+  "$grub_tools/ld-linux-aarch64.so.1" --library-path "$lp" "$grub_tools/bin/$1" "${@:2}"
 }
 
 # Validate the built kernel: real ELF + GRUB-recognized Multiboot2 header.
@@ -39,8 +42,11 @@ iso_test() {
   if have_system_grub; then
     bash scripts/kernel_image.sh
   elif have_vendored_grub; then
-    # kernel_image.sh shells out to $GRUB_FILE; hand it the loader invocation.
-    GRUB_FILE="$grub_tools/ld-linux-aarch64.so.1 --library-path $grub_tools/lib $grub_tools/bin/grub-file" \
+    # grub-file needs the loader too; wrap it for kernel_image.sh.
+    local glibc_lib="${PREFIX:-/data/data/com.termux/files/usr}/glibc/lib"
+    local lp="$grub_tools/lib"
+    [[ -d "$glibc_lib" ]] && lp="$lp:$glibc_lib"
+    GRUB_FILE="$grub_tools/ld-linux-aarch64.so.1 --library-path $lp $grub_tools/bin/grub-file" \
       bash scripts/kernel_image.sh
   else
     echo "iso.sh: grub tooling missing, run 'make setup android'" >&2
