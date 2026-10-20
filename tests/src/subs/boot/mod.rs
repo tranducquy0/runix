@@ -1,4 +1,4 @@
-// Thin bridge to the kernel's Multiboot2 parser; resolves to the real file
-// two levels up and to the repo root: runix/src/subs/boot/multiboot2.rs.
-#[path = "../../../../src/subs/boot/multiboot2.rs"]
+// Boot-handoff shim: `multiboot2.rs` in this tree mirrors the kernel
+// wrapper (`src/subs/boot/multiboot2.rs`) with per-child `#[path]`
+// re-points, so the host tests exercise the real parser sources.
 pub mod multiboot2;
