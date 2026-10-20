@@ -34,7 +34,16 @@ grub_run() {
   local glibc_lib="${PREFIX:-/data/data/com.termux/files/usr}/glibc/lib"
   local lp="$grub_tools/lib"
   [[ -d "$glibc_lib" ]] && lp="$lp:$glibc_lib"
-  "$grub_tools/ld-linux-aarch64.so.1" --library-path "$lp" "$grub_tools/bin/$1" "${@:2}"
+  local tmpdir
+  tmpdir="${TMPDIR:-/data/data/com.termux/files/usr/tmp/opencode}"
+  mkdir -p "$tmpdir"
+  env -i \
+    PATH=/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/glibc/bin \
+    HOME="$HOME" \
+    PWD="$PWD" \
+    PREFIX="${PREFIX:-/data/data/com.termux/files/usr}" \
+    TMPDIR="$tmpdir" \
+    "$grub_tools/ld-linux-aarch64.so.1" --library-path "$lp" "$grub_tools/bin/$1" "${@:2}"
 }
 
 # Validate the built kernel: real ELF + GRUB-recognized Multiboot2 header.
@@ -46,7 +55,9 @@ iso_test() {
     local glibc_lib="${PREFIX:-/data/data/com.termux/files/usr}/glibc/lib"
     local lp="$grub_tools/lib"
     [[ -d "$glibc_lib" ]] && lp="$lp:$glibc_lib"
-    GRUB_FILE="$grub_tools/ld-linux-aarch64.so.1 --library-path $lp $grub_tools/bin/grub-file" \
+    local tmpdir="${TMPDIR:-/data/data/com.termux/files/usr/tmp/opencode}"
+    mkdir -p "$tmpdir"
+    GRUB_FILE="env -i PATH=/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/glibc/bin HOME='$HOME' PWD='$PWD' PREFIX='${PREFIX:-/data/data/com.termux/files/usr}' TMPDIR='$tmpdir' $grub_tools/ld-linux-aarch64.so.1 --library-path $lp $grub_tools/bin/grub-file" \
       bash scripts/kernel_image.sh
   else
     echo "iso.sh: grub tooling missing, run 'make setup android'" >&2
