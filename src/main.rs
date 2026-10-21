@@ -4,10 +4,12 @@
 //! 1. `asm/boot.asm` builds a stack, forwards `eax`/`ebx` to [`kernel_main`].
 //! 2. [`kernel_main`] clears the VGA screen, validates the Multiboot2 magic,
 //!    and parses the boot-info block for a memory map.
-//! 3. Occupied spans (kernel image, boot-info block, boot stack) are reserved
+//! 3. The kernel's own flat ring-0 GDT is installed and every segment
+//!    register is reloaded onto it, ending the dependency on GRUB's table.
+//! 4. Occupied spans (kernel image, boot-info block, boot stack) are reserved
 //!    out of the map, a [`FrameAllocator`] is built from the remainder, and a
 //!    small alloc/free smoke test exercises the bitmap.
-//! 4. Everything halts in `loop {}` — no interrupts or scheduling yet.
+//! 5. Everything halts in `loop {}` — no interrupts or scheduling yet.
 //!
 //! The Multiboot2 header static itself lives at the bottom of this file in
 //! `.multiboot2` so GRUB can find it within the image's first 32 KiB.
@@ -24,6 +26,7 @@ mod drivers;
 
 // core subsystems
 mod subs;
+use subs::arch::gdt;
 use subs::boot::multiboot2::{
     self, BootInformation, Multiboot2Header, CHECKSUM, MULTIBOOT2_ARCHITECTURE_I386,
     MULTIBOOT2_HEADER_LENGTH, MULTIBOOT2_HEADER_MAGIC,
@@ -54,6 +57,14 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
     drivers::output::vga::WRITER.lock().clear_screen();
 
     println!("Welcome to the R-Unix kernel");
+
+    // Swap GDTR onto the kernel's own flat ring-0 table before anything else
+    // can grow a dependency on the descriptors GRUB happened to leave loaded.
+    gdt::init();
+    println!(
+        "installed kernel gdt: code = {:#x}, data = {:#x}",
+        gdt::KERNEL_CODE_SELECTOR, gdt::KERNEL_DATA_SELECTOR
+    );
 
     if multiboot_magic != multiboot2::BOOTLOADER_MAGIC {
         println!("invalid multiboot2 magic: {:#x}", multiboot_magic);

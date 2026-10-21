@@ -19,10 +19,10 @@
 ## Architecture / entrypoints
 - `src/main.rs` — kernel entry: Multiboot2 header embedded, `kernel_main(multiboot_magic, multiboot_info_addr)` (clears the VGA screen first), boot memory reservation, frame allocator smoke test. Boot stub is `global_asm!(include_str!("asm/boot.asm"))`.
 - `src/asm/boot.asm` — raw boot assembly (keep register/stack handoff to GRUB explicit).
-- Subsystems under `src/subs/` (declared in `src/subs/mod.rs`): `boot/` (Multiboot2 types/helpers), `mem/` (boot memory map + frame allocator; renamed from `memory`), `handlers/` (panic handler; future IDT/interrupt dispatch).
+- Subsystems under `src/subs/` (declared in `src/subs/mod.rs`): `arch/` (CPU descriptor tables; GDT installed right after VGA clear, asm stub in `src/asm/gdt.asm`), `boot/` (Multiboot2 types/helpers), `mem/` (boot memory map + frame allocator; renamed from `memory`), `handlers/` (panic handler; future IDT/interrupt dispatch).
 - Drivers under `src/drivers/` split into `output/` (VGA text driver) and `input/` (placeholder for keyboard). `main.rs` keeps `#[macro_use] mod drivers;` so the `print!`/`println!` macros stay available; their bodies hardcode `$crate::drivers::output::vga::WRITER` — update that path if the module moves.
 - Linker: `scripts/linker.ld`. ISO layout: `iso/boot/` + GRUB config (`iso/boot/grub/grub.cfg`, `timeout=4`) under `iso/`.
-- Host tests: `tests/runix-tests` crate re-exposes kernel logic modules (`subs/boot/multiboot2`, `subs/mem`) via thin `include!`/`#[path]` shims in `tests/src/subs/`; hardware-coupled code (VGA, boot asm) is covered by the QEMU flow instead.
+- Host tests: `tests/runix-tests` crate re-exposes kernel logic modules (`subs/boot/multiboot2`, `subs/mem`, `subs/arch/gdt`) via thin `include!`/`#[path]` shims in `tests/src/subs/`; hardware-coupled code (VGA, GDT asm stub, boot asm) is covered by the QEMU flow instead.
 
 ## Skills
 Repo-local agent skills live in `.opencode/skills/` (`kernel-build`, `kernel-memory`, `kernel-multiboot2`, `kernel-vga-output`, `commit`, `code-review`). Load one via the `skill` tool when working in that area; `kernel-build` covers toolchain details (e.g. `i686-runix-target` and LLD linking), `commit` codifies the Conventional Commits style used in this repo, and `code-review` governs PR/diff reviews (evidence-based findings, severity rules, read-only scope).

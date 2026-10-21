@@ -1,0 +1,41 @@
+# One-shot GDT install stub.
+#
+# GRUB hands us protected mode on its own GDT; this stub repoints GDTR at the
+# kernel's table (see subs/arch/gdt.rs) and reloads every segment register
+# back-to-back, so no instruction runs with a mix of GRUB's and runix's
+# selectors. The hard-coded selector values below must stay in sync with
+# KERNEL_CODE_SELECTOR / KERNEL_DATA_SELECTOR in subs/arch/gdt.rs.
+#
+# extern "C" fn gdt_load_flush(gdt_pointer_addr: u32)
+
+# fix: this file uses Intel's x86 ASM syntax, report it
+.intel_syntax noprefix
+
+.section .text
+.global gdt_load_flush
+gdt_load_flush:
+    # The lgdt operand is a 6-byte limit/base pair living behind the C-ABI
+    # pointer argument; `lgdt` copies it into GDTR and retires immediately,
+    # so a stack-local pointer is fine.
+    mov eax, [esp + 4]
+    lgdt [eax]
+
+    # Reload every data segment register onto the flat ring-0 data selector.
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+    # Reload CS with a far return: the selector is pushed first (higher slot)
+    # and the resume address last, so `retf` pops EIP then the selector and
+    # execution continues right after the far return — now running on the
+    # kernel's own code segment.
+    push dword ptr 0x08
+    mov eax, offset .resume_in_new_code
+    push eax
+    retf
+
+.resume_in_new_code:
+    ret
