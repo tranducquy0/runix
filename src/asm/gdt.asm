@@ -8,6 +8,9 @@
 #
 # extern "C" fn gdt_load_flush(gdt_pointer_addr: u32)
 
+# fix: this file uses Intel's x86 ASM syntax, report it
+.intel_syntax noprefix
+
 .section .text
 .global gdt_load_flush
 gdt_load_flush:
