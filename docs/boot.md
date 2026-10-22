@@ -114,7 +114,8 @@ RAM). The memory map then feeds allocation policy in `src/subs/mem/` — see
 
 ## Limitations
 
-- no IDT/GDT setup, no paging setup
+- no paging setup
+- interrupts disabled (IDT installed for exceptions only; no scheduling)
 - no serial console fallback — VGA text only
 - no handoff from the boot stack to a long-lived kernel stack
 - validation beyond the bootloader magic and the memory map tag's presence

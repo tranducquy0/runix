@@ -58,8 +58,10 @@ have. See [boot.md](boot.md) for the entry contract and tag format.
 
 ### Handlers (`src/subs/handlers`)
 
-The `#[panic_handler]`: prints a panic banner and message over VGA, then halts. Future
-IDT / interrupt dispatch belongs here.
+- The `#[panic_handler]`: prints a panic banner and message over VGA, then halts.
+- `idt.rs` installs the IDT with exception handlers (like panic: print and halt) and
+  loads it via `asm/idt.asm`. The 8259 PIC is remapped in `src/drivers/pic.rs` so
+  IRQs don't collide with CPU exceptions; interrupts remain disabled for now.
 
 ### Drivers (`src/drivers`)
 

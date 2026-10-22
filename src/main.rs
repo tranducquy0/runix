@@ -6,10 +6,12 @@
 //!    and parses the boot-info block for a memory map.
 //! 3. The kernel's own flat ring-0 GDT is installed and every segment
 //!    register is reloaded onto it, ending the dependency on GRUB's table.
-//! 4. Occupied spans (kernel image, boot-info block, boot stack) are reserved
+//! 4. The PIC is remapped and the kernel's IDT is installed for CPU exception
+//!    handling (interrupts remain disabled for now).
+//! 5. Occupied spans (kernel image, boot-info block, boot stack) are reserved
 //!    out of the map, a [`FrameAllocator`] is built from the remainder, and a
 //!    small alloc/free smoke test exercises the bitmap.
-//! 5. Everything halts in `loop {}` — no interrupts or scheduling yet.
+//! 6. Everything halts in `loop {}` — no scheduler or userspace yet.
 //!
 //! The Multiboot2 header static itself lives at the bottom of this file in
 //! `.multiboot2` so GRUB can find it within the image's first 32 KiB.
@@ -65,6 +67,10 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
         "installed kernel gdt: code = {:#x}, data = {:#x}",
         gdt::KERNEL_CODE_SELECTOR, gdt::KERNEL_DATA_SELECTOR
     );
+
+    // Remap the PIC and install the IDT for CPU exception handling.
+    drivers::pic::init();
+    subs::handlers::idt::init();
 
     if multiboot_magic != multiboot2::BOOTLOADER_MAGIC {
         println!("invalid multiboot2 magic: {:#x}", multiboot_magic);
