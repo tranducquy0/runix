@@ -243,10 +243,8 @@ isr_common_stub:
     call isr_handler
     add esp, 4
     popa
-    mov ax, 0x10
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
+    # No segment reload here: the kernel runs ring 0 with ds/es/fs/gs = 0x10
+    # set once by gdt_load_flush, and no handler path modifies them, so a
+    # reload would only clobber the low half of eax that popa just restored.
     add esp, 8
     iret
