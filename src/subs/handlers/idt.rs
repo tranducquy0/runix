@@ -127,14 +127,12 @@ extern "C" fn isr_handler(stack_frame: *const u32) {
     
     // Read interrupt number and error code from stack
     // We need to be careful about stack layout
-    unsafe {
-        // Try to read - in our setup, after pusha (32 bytes) and before our push esp
-        // The stack frame passed is the value of esp after pusha, segments set, before pushing esp
-        // Actually: pusha decrements esp by 32, saves registers. Then we push esp again (decrements by 4, saves old esp value)
-        // So when handler is called with cdecl, stack has: [esp_saved, vector, error_code, ...old stuff...] relative to call
-        // This is a bit messy; easier to just get vector from a known location
-        // For minimal implementation, just print generic message
-    }
+    // Try to read - in our setup, after pusha (32 bytes) and before our push esp
+    // The stack frame passed is the value of esp after pusha, segments set, before pushing esp
+    // Actually: pusha decrements esp by 32, saves registers. Then we push esp again (decrements by 4, saves old esp value)
+    // So when handler is called with cdecl, stack has: [esp_saved, vector, error_code, ...old stuff...] relative to call
+    // This is a bit messy; easier to just get vector from a known location
+    // For minimal implementation, just print generic message
     
     drivers::output::vga::WRITER.lock().clear_screen();
     println!("KERNEL PANIC! Something wrong (horribly wrong) happened!\n");
@@ -148,7 +146,7 @@ extern "C" fn isr_handler(stack_frame: *const u32) {
 /// Initialize the IDT and load it.
 /// Must be called after GDT is initialized.
 pub fn init() {
-    let idt = unsafe { &raw mut IDT };
+    let idt = &raw mut IDT;
     
     // Set up exception handlers
     unsafe {
@@ -188,7 +186,7 @@ pub fn init() {
     
     let idt_ptr = IdtPointer {
         limit: ((core::mem::size_of::<IdtEntry>() * IDT_ENTRIES) as u16) - 1,
-        base: unsafe { &raw const IDT as u32 },
+        base: &raw const IDT as u32,
     };
     
     unsafe {
