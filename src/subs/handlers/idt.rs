@@ -127,25 +127,15 @@ unsafe extern "C" {
 /// Exception handler called from assembly stubs.
 /// Behaves like the panic handler - prints and halts.
 #[unsafe(no_mangle)]
-extern "C" fn isr_handler(stack_frame: *const u32) {
-    // Stack layout from our stub:
-    // pusha pushed: edi, esi, ebp, esp, ebx, edx, ecx, eax (8 words)
-    // then we pushed: vector number, error code (2 words)
-    // When we pushed esp before calling, we pushed it after saving segments but before pusha?
-    // Actually in our stub: pusha, set segments, push esp, call handler
-    // So on stack (from top to bottom when we push esp): esp (pushed last) points to after pusha
-    // The pusha saves 8 registers, so stack is modified. Easier to just read from known offsets.
-    let _ = stack_frame;
-    
-    // Read interrupt number and error code from stack
-    // We need to be careful about stack layout
-    // Try to read - in our setup, after pusha (32 bytes) and before our push esp
-    // The stack frame passed is the value of esp after pusha, segments set, before pushing esp
-    // Actually: pusha decrements esp by 32, saves registers. Then we push esp again (decrements by 4, saves old esp value)
-    // So when handler is called with cdecl, stack has: [esp_saved, vector, error_code, ...old stuff...] relative to call
-    // This is a bit messy; easier to just get vector from a known location
-    // For minimal implementation, just print generic message
-    
+extern "C" fn isr_handler(frame: *const u32) {
+    // Uniform word layout at `frame` for error-code and no-code vectors
+    // (see asm/idt.asm: every stub pushes the vector number, non-error
+    // stubs push a dummy error word below it, and pusha lands below that):
+    // [0..8) = pusha block (eax, ecx, edx, ebx, old esp, ebp, esi, edi)
+    // [8] = vector, [9] = error code (0 for no-code vectors), [10] = eip
+    let (vector, error_code, eip) =
+        unsafe { (*frame.add(8), *frame.add(9), *frame.add(10)) };
+
     // A fault can land while the WRITER lock is held mid-output; under the
     // single-threaded, interrupts-disabled model the stale holder can never
     // resume, so drop it before re-locking or the banner below deadlocks.
@@ -156,11 +146,13 @@ extern "C" fn isr_handler(stack_frame: *const u32) {
     }
 
     drivers::output::vga::WRITER.lock().clear_screen();
-    println!("KERNEL PANIC! Something wrong (horribly wrong) happened!\n");
-    println!("Stack: \n CPU EXCEPTION!");
-    println!("\nException handling not yet fully implemented.");
+    println!("KERNEL PANIC! CPU EXCEPTION!\n");
+    println!(
+        "vector = {}, error code = {:#x}, eip = {:#x}",
+        vector, error_code, eip
+    );
     println!("System halted.");
-    
+
     loop {}
 }
 
