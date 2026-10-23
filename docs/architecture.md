@@ -9,15 +9,23 @@ Everything else is still to come.
 ```
 src/
 ├── main.rs                  kernel entry, Multiboot2 header, boot handoff
-├── asm/boot.asm             raw boot stub (_start): stack setup + GRUB handoff
+├── asm/
+│   ├── boot.asm             raw boot stub (_start): stack setup + GRUB handoff
+│   ├── gdt.asm              lgdt + segment-register flush, and the TR (ltr) load
+│   └── idt.asm              exception stubs + idt_load
 ├── subs/                    core subsystems
 │   ├── boot/multiboot2.rs   Multiboot2 boot-info parser (header + tag walking)
+│   ├── arch/gdt.rs          kernel GDT (flat ring-0 code/data, TSS entry)
+│   ├── arch/tss.rs          32-bit TSS (privilege-change stack groundwork)
 │   ├── mem/mod.rs           boot memory map, reserved-range filtering
 │   ├── mem/reusables.rs      frame allocator definitions (bitmap, struct)
 │   ├── mem/operators.rs      frame allocator operators (new/alloc/free)
-│   └── handlers/panic.rs    panic handler
+│   ├── handlers/panic.rs    panic handler
+│   ├── handlers/idt.rs      IDT with exception handlers
+│   └── handlers/doublefault.rs  #DF task gate (own TSS + stack)
 └── drivers/                 hardware drivers
     ├── output/vga.rs        VGA text driver + print!/println! macros
+    ├── pic.rs               8259 PIC driver, remap + EOI helpers
     └── input/               placeholder for future input drivers (e.g. keyboard)
 ```
 
@@ -33,6 +41,22 @@ Other relevant files:
   memory modules via thin `include!` / `#[path]` shims, run with `make tests`.
 
 ## Subsystems
+
+### Arch (`src/subs/arch`)
+
+- `gdt.rs` — installs the kernel's own flat ring-0 GDT (null + code + data) and
+  reloads every segment register via the `asm/gdt.asm` stub in one uninterrupted
+  sequence, ending the dependency on GRUB's descriptors.
+- `tss.rs` — registers two 32-bit TSSes: the kernel's own at GDT selector `0x18`
+  (loaded into TR during the same `init`; `esp0`/`ss0` are pointed at the boot
+  stack by `kernel_main` while interrupts are off) and the double-fault task's
+  at `0x20` (owned by `handlers/doublefault.rs`, left "available" so only the
+  IDT's vector-8 task gate may enter it; the switch flips it busy). The layout
+  is the SDM 32-bit TSS: dword rows up to EDI, then segment snapshots spaced
+  four bytes apart — verified against QEMU's `-d int` state dump, since the
+  x86_64 TSS packs these segments contiguously and the 32-bit one does not.
+- `doublefault` (see the Handlers section below) plugs its TSS address into
+  `gdt::init` at boot.
 
 ### Boot (`src/subs/boot`)
 
@@ -58,8 +82,15 @@ have. See [boot.md](boot.md) for the entry contract and tag format.
 
 ### Handlers (`src/subs/handlers`)
 
-The `#[panic_handler]`: prints a panic banner and message over VGA, then halts. Future
-IDT / interrupt dispatch belongs here.
+- The `#[panic_handler]`: prints a panic banner and message over VGA, then halts.
+- `idt.rs` installs the IDT with exception handlers (like panic: print and halt) and
+  loads it via `asm/idt.asm`. The 8259 PIC is remapped in `src/drivers/pic.rs` so
+  IRQs don't collide with CPU exceptions; interrupts remain disabled for now.
+- `doublefault.rs` stages vector 8 (#DF) as a **task gate** into a dedicated 32-bit
+  TSS + 4 KiB stack: on a double fault the CPU performs a full task switch, landing
+  the handler on provably-good stack/segments regardless of the interrupted task's
+  state. The handler reports the faulting eip/esp that hardware snapshot into the
+  kernel TSS, then halts under the same contract as the panic screen.
 
 ### Drivers (`src/drivers`)
 

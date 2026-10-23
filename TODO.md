@@ -4,12 +4,14 @@ Next milestones, roughly in dependency order. None of this exists yet — the ke
 currently relies on GRUB's flat setup, prints VGA text only, and idles after the frame
 allocator smoke test.
 
-- [ ] **GDT** — install our own flat segments instead of relying on whatever GRUB left
+- [x] **GDT** — install our own flat segments instead of relying on whatever GRUB left
   in place. Prerequisite for anything ring- or segment-related (IDT, later userspace).
-- [ ] **IDT / interrupt dispatch** — lives in
+- [x] **IDT / interrupt dispatch** — lives in
   [`src/subs/handlers/`](src/subs/handlers) next to the panic handler (see
-  [docs/architecture.md](docs/architecture.md)). Needs the GDT first, plus a PIC remap
-  so IRQs don't collide with CPU exceptions.
+  [docs/architecture.md](docs/architecture.md)). GDT installed, PIC remapped in
+  [`src/drivers/pic.rs`](src/drivers/pic.rs), exception handlers in place; interrupts
+  remain disabled for now. Double faults enter a dedicated TSS-backed task via
+  IDT entry 8's task gate (own stack, snapshot report, halt). Ready to extend for IRQs.
 - [ ] **Serial output (QEMU)** — a COM1 driver under
   [`src/drivers/output/`](src/drivers/output). Complements VGA and makes headless runs
   (`make vm agent`) readable without dumping the text buffer; today there is no serial

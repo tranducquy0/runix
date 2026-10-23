@@ -7,7 +7,7 @@
 # KERNEL_CODE_SELECTOR / KERNEL_DATA_SELECTOR in subs/arch/gdt.rs.
 #
 # extern "C" fn gdt_load_flush(gdt_pointer_addr: u32)
-
+# extern "C" fn tss_load(tss_selector: u32)
 .section .text
 .global gdt_load_flush
 gdt_load_flush:
@@ -35,4 +35,17 @@ gdt_load_flush:
     retf
 
 .resume_in_new_code:
+    ret
+
+# The companion TR load: `ltr` needs a plain u16 selector, which the C ABI
+# passes in the low half of EAX. Runs immediately after `gdt_load_flush`,
+# while the new GDT is already live. No flush needed — TR metadata updates
+# lazily on `ltr` itself.
+#
+# extern "C" fn tss_load(tss_selector: u32)
+.global tss_load
+tss_load:
+    # Selector sits right behind the return address in EAX's low half.
+    mov ax, [esp + 4]
+    ltr ax
     ret
