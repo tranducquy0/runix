@@ -46,6 +46,15 @@ extern "C" fn doublefault_handler() -> ! {
     let eip = tss::saved_eip();
     let esp = tss::saved_esp();
 
+    // A fault can land while the WRITER lock is held mid-output; under the
+    // single-threaded, interrupts-disabled model the stale holder can never
+    // resume, so drop it before re-locking or the banner below deadlocks.
+    unsafe {
+        if drivers::output::vga::WRITER.is_locked() {
+            drivers::output::vga::WRITER.force_unlock();
+        }
+    }
+
     drivers::output::vga::WRITER.lock().clear_screen();
     println!("KERNEL PANIC! Something wrong (horribly wrong) happened!\n");
     println!("double fault (#df): faulting task eip = {:#x}, esp = {:#x}", eip, esp);
