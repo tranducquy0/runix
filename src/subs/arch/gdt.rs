@@ -4,8 +4,9 @@
 //! installs the kernel's equivalents (null + flat ring-0 code + flat ring-0
 //! data) and reloads every segment register in one uninterrupted assembly
 //! step ([`init`], wired to `asm/gdt.asm`), so nothing after boot depends on
-//! descriptor state GRUB happens to leave behind. Selector `0x18` stays
-//! reserved for a TSS once interrupts or ring 3 arrive.
+//! descriptor state GRUB happens to leave behind. Selector `0x18` carries the
+//! kernel's TSS (see [`super::tss`]) — staged groundwork for the
+//! stack-switching that interrupts or ring 3 will eventually need.
 
 #[cfg(target_arch = "x86")]
 use core::arch::global_asm;
@@ -17,6 +18,11 @@ pub const KERNEL_CODE_SELECTOR: u16 = 0x08;
 /// Selector (GDT index << 3) of the kernel's own flat data segment.
 /// Must stay in sync with the hard-coded selectors in `asm/gdt.asm`.
 pub const KERNEL_DATA_SELECTOR: u16 = 0x10;
+
+/// Selector (GDT index 3 << 3) of the kernel's own TSS, loaded into TR by
+/// [`init`]. Must stay in sync with the TSS stub in `asm/gdt.asm` (none yet —
+/// the selector is only taken from Rust code today).
+pub const KERNEL_TSS_SELECTOR: u16 = 0x18;
 
 /// One 8-byte segment descriptor, bit-packed exactly the way the CPU decodes
 /// it: bits 0-15 limit[0..16], 16-31 base[0..16], 32-39 base[16..24],
@@ -51,23 +57,36 @@ const ACCESS_FLAT_RING0_CODE: u8 = 0x9A;
 const ACCESS_FLAT_RING0_DATA: u8 = 0x92;
 // Flags nibble: 4 KiB granularity + 32-bit default operand size.
 const FLAGS_4K_GRANULARITY_32BIT: u8 = 0xC;
+// Access byte for the kernel's own TSS descriptor: present, system segment
+// (S = 0, DPL 00), available 32-bit TSS (type 1001).
+#[cfg(target_arch = "x86")]
+const ACCESS_KERNEL_TSS: u8 = 0x89;
+// Flags nibble for the TSS descriptor: byte granularity, nothing else set.
+#[cfg(target_arch = "x86")]
+const FLAGS_BYTE_GRANULARITY: u8 = 0x0;
 // Limit paired with 4 KiB granularity so one flat entry spans 4 GiB.
 const FLAT_LIMIT: u32 = 0xFFFFF;
 
 // The table is 8-byte aligned so its first entry lands on a descriptor
 // boundary, and `#[used]`-adjacent normal statics place it inside the kernel
-// image ranges the boot-reservation code already protects.
+// image ranges the boot-reservation code already protects. Entry 3 starts as
+// NULL purely so the static const-initializes; `init` overwrites it with the
+// kernel TSS descriptor before `lgdt` ever sees the table.
 #[repr(align(8))]
 struct GlobalDescriptorTable {
-    entries: [SegmentDescriptor; 3],
+    // Only the table's address and size cross into asm (`lgdt`); the host
+    // test build never dereferences entries, so allow dead there.
+    #[cfg_attr(not(target_arch = "x86"), allow(dead_code))]
+    entries: [SegmentDescriptor; 4],
 }
 
 #[used]
-static GDT: GlobalDescriptorTable = GlobalDescriptorTable {
+static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable {
     entries: [
         SegmentDescriptor::NULL,
         SegmentDescriptor::new(0, FLAT_LIMIT, ACCESS_FLAT_RING0_CODE, FLAGS_4K_GRANULARITY_32BIT),
         SegmentDescriptor::new(0, FLAT_LIMIT, ACCESS_FLAT_RING0_DATA, FLAGS_4K_GRANULARITY_32BIT),
+        SegmentDescriptor::NULL,
     ],
 };
 
@@ -87,6 +106,8 @@ struct DescriptorTablePointer {
 unsafe extern "C" {
     // Defined in `asm/gdt.asm`: lgdt + reload data segments + far-return CS.
     fn gdt_load_flush(gdt_pointer_addr: u32);
+    // Defined in `asm/gdt.asm`: ltr with the selector argument.
+    fn tss_load(tss_selector: u32);
 }
 
 /// Install the kernel's own flat ring-0 GDT and reload every segment
@@ -97,14 +118,36 @@ unsafe extern "C" {
 /// here triple-faults the CPU instead of returning an error.
 #[cfg(target_arch = "x86")]
 pub fn init() {
+    // Descriptor 3 (selector `KERNEL_TSS_SELECTOR`) describes the kernel TSS:
+    // byte-granular limit covering exactly the 104-byte table, base = the
+    // static's linear address. It must be complete before `lgdt` ever loads
+    // this table — the CPU reads the descriptor on `ltr`, and that only
+    // happens after the flush below.
+    let table = &raw mut GDT;
+    unsafe {
+        (*table).entries[3] = SegmentDescriptor::new(
+            super::tss::address(),
+            (core::mem::size_of::<super::tss::Tss>() - 1) as u32,
+            ACCESS_KERNEL_TSS,
+            FLAGS_BYTE_GRANULARITY,
+        );
+    }
+
     let pointer = DescriptorTablePointer {
-        limit: (GDT.entries.len() * core::mem::size_of::<SegmentDescriptor>() - 1) as u16,
-        base: &raw const GDT as u32,
+        limit: unsafe {
+            ((*table).entries.len() * core::mem::size_of::<SegmentDescriptor>() - 1) as u16
+        },
+        base: table as u32,
     };
 
     // SAFETY: the pointer describes the statically sized table above, which
     // lives inside the reservation already carved out for the kernel image;
     // the stub swaps ds/es/fs/gs/ss and CS back-to-back with no intermediate
-    // Rust code executing.
-    unsafe { gdt_load_flush(&raw const pointer as u32) };
+    // Rust code executing. `tss_load` then runs `ltr` on the flushed table
+    // while interrupts remain disabled — the TSS itself is still zero apart
+    // from its io_bitmap_base, which is exactly the state ring 0 tolerates.
+    unsafe {
+        gdt_load_flush(&raw const pointer as u32);
+        tss_load(KERNEL_TSS_SELECTOR as u32);
+    }
 }

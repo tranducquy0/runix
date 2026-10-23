@@ -6,12 +6,14 @@
 //!    and parses the boot-info block for a memory map.
 //! 3. The kernel's own flat ring-0 GDT is installed and every segment
 //!    register is reloaded onto it, ending the dependency on GRUB's table.
-//! 4. The PIC is remapped and the kernel's IDT is installed for CPU exception
+//! 4. The kernel TSS is registered at selector 0x18 and pointed at the boot
+//!    stack — groundwork for privilege-change stack switches.
+//! 5. The PIC is remapped and the kernel's IDT is installed for CPU exception
 //!    handling (interrupts remain disabled for now).
-//! 5. Occupied spans (kernel image, boot-info block, boot stack) are reserved
+//! 6. Occupied spans (kernel image, boot-info block, boot stack) are reserved
 //!    out of the map, a [`FrameAllocator`] is built from the remainder, and a
 //!    small alloc/free smoke test exercises the bitmap.
-//! 6. Everything halts in `loop {}` — no scheduler or userspace yet.
+//! 7. Everything halts in `loop {}` — no scheduler or userspace yet.
 //!
 //! The Multiboot2 header static itself lives at the bottom of this file in
 //! `.multiboot2` so GRUB can find it within the image's first 32 KiB.
@@ -66,6 +68,17 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
     println!(
         "installed kernel gdt: code = {:#x}, data = {:#x}",
         gdt::KERNEL_CODE_SELECTOR, gdt::KERNEL_DATA_SELECTOR
+    );
+
+    // The TSS descriptor and `ltr` already happened inside `gdt::init`; this
+    // call only aims esp0/ss0 at the boot stack, which is safe to do before
+    // the IDT exists — interrupts are still off, so no privilege switch can
+    // run against the zeroed defaults.
+    let kernel_stack_top = core::ptr::addr_of!(boot_stack_top) as u32;
+    subs::arch::tss::set_kernel_stack(kernel_stack_top, gdt::KERNEL_DATA_SELECTOR);
+    println!(
+        "installed kernel tss: selector = {:#x}, kernel stack = {:#x}",
+        gdt::KERNEL_TSS_SELECTOR, kernel_stack_top
     );
 
     // Remap the PIC and install the IDT for CPU exception handling.

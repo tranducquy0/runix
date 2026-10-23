@@ -9,15 +9,22 @@ Everything else is still to come.
 ```
 src/
 ├── main.rs                  kernel entry, Multiboot2 header, boot handoff
-├── asm/boot.asm             raw boot stub (_start): stack setup + GRUB handoff
+├── asm/
+│   ├── boot.asm             raw boot stub (_start): stack setup + GRUB handoff
+│   ├── gdt.asm              lgdt + segment-register flush, and the TR (ltr) load
+│   └── idt.asm              exception stubs + idt_load
 ├── subs/                    core subsystems
 │   ├── boot/multiboot2.rs   Multiboot2 boot-info parser (header + tag walking)
+│   ├── arch/gdt.rs          kernel GDT (flat ring-0 code/data, TSS entry)
+│   ├── arch/tss.rs          32-bit TSS (privilege-change stack groundwork)
 │   ├── mem/mod.rs           boot memory map, reserved-range filtering
 │   ├── mem/reusables.rs      frame allocator definitions (bitmap, struct)
 │   ├── mem/operators.rs      frame allocator operators (new/alloc/free)
-│   └── handlers/panic.rs    panic handler
+│   ├── handlers/panic.rs    panic handler
+│   └── handlers/idt.rs      IDT with exception handlers
 └── drivers/                 hardware drivers
     ├── output/vga.rs        VGA text driver + print!/println! macros
+    ├── pic.rs               8259 PIC driver, remap + EOI helpers
     └── input/               placeholder for future input drivers (e.g. keyboard)
 ```
 
@@ -33,6 +40,17 @@ Other relevant files:
   memory modules via thin `include!` / `#[path]` shims, run with `make tests`.
 
 ## Subsystems
+
+### Arch (`src/subs/arch`)
+
+- `gdt.rs` — installs the kernel's own flat ring-0 GDT (null + code + data) and
+  reloads every segment register via the `asm/gdt.asm` stub in one uninterrupted
+  sequence, ending the dependency on GRUB's descriptors.
+- `tss.rs` — registers an available-32-bit TSS at GDT selector `0x18` (loaded into
+  TR during the same `init`). Right now it exists as staged groundwork: `esp0`/
+  `ss0` are pointed at the boot stack once interrupts are known to be off, and the
+  CPU only consults them on privilege changes that can't happen yet. The stack
+  itself is still borrowed from the boot stub (see [boot.md](boot.md) limitations).
 
 ### Boot (`src/subs/boot`)
 
@@ -62,6 +80,7 @@ have. See [boot.md](boot.md) for the entry contract and tag format.
 - `idt.rs` installs the IDT with exception handlers (like panic: print and halt) and
   loads it via `asm/idt.asm`. The 8259 PIC is remapped in `src/drivers/pic.rs` so
   IRQs don't collide with CPU exceptions; interrupts remain disabled for now.
+  Double-fault handling (with its own TSS-backed stack) is the staged next step.
 
 ### Drivers (`src/drivers`)
 

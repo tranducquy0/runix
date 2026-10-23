@@ -1,4 +1,5 @@
-// Architecture-specific CPU setup: descriptor tables today, a TSS once
-// interrupts or ring 3 land.
+// Architecture-specific CPU setup: descriptor tables — the kernel GDT plus a
+// registered TSS — today.
 
 pub mod gdt;
+pub mod tss;
