@@ -3,4 +3,5 @@
 /iso/boot/kernel.bin
 /*.iso
 /tests/target
-/.run/.tools/
+/.run/
+/.tools/
