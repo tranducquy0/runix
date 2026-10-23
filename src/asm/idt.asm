@@ -7,8 +7,6 @@
 #
 # extern "C" fn idt_load(idt_pointer_addr: u32)
 
-.intel_syntax noprefix
-
 .section .text
 
 # Load IDT pointer and return
