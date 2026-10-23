@@ -50,6 +50,19 @@ impl IdtEntry {
         // 0x8E = present (1) + DPL 0 (00) + storage segment 0 + gate type 1110 (interrupt gate)
         self.type_attr = 0x8E;
     }
+
+    /// Stage a task gate: the CPU enters `selector`'s TSS with a full
+    /// hardware task switch (own stack, own register file) instead of
+    /// pushing an interrupt frame onto the suspect current stack. Used for
+    /// the double fault, where SS:ESP cannot be trusted.
+    fn set_task_gate(&mut self, selector: u16) {
+        self.offset_low = 0;
+        self.offset_high = 0;
+        self.selector = selector;
+        self.zero = 0;
+        // 0x85 = present (1) + DPL 0 (00) + gate type 0101 (32-bit task gate)
+        self.type_attr = 0x85;
+    }
 }
 
 /// IDT pointer structure for lidt instruction.
@@ -86,7 +99,6 @@ unsafe extern "C" {
     fn isr5();
     fn isr6();
     fn isr7();
-    fn isr8();
     fn isr9();
     fn isr10();
     fn isr11();
@@ -158,7 +170,10 @@ pub fn init() {
         (*idt).entries[5].set_handler(isr5 as *const () as u32);
         (*idt).entries[6].set_handler(isr6 as *const () as u32);
         (*idt).entries[7].set_handler(isr7 as *const () as u32);
-        (*idt).entries[8].set_handler(isr8 as *const () as u32);
+        // Vector 8 (double fault) is a task gate, not an interrupt gate: the
+        // CPU task-switches into subs/handlers/doublefault.rs's TSS so the
+        // handler never runs on a possibly-broken stack.
+        (*idt).entries[8].set_task_gate(gdt::KERNEL_DF_TSS_SELECTOR);
         (*idt).entries[9].set_handler(isr9 as *const () as u32);
         (*idt).entries[10].set_handler(isr10 as *const () as u32);
         (*idt).entries[11].set_handler(isr11 as *const () as u32);

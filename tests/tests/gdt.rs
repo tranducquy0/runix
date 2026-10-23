@@ -4,7 +4,8 @@
 //! and stay covered by the live QEMU boot check instead.
 
 use runix_tests::subs::arch::gdt::{
-    KERNEL_CODE_SELECTOR, KERNEL_DATA_SELECTOR, SegmentDescriptor,
+    KERNEL_CODE_SELECTOR, KERNEL_DATA_SELECTOR, KERNEL_DF_TSS_SELECTOR, KERNEL_TSS_SELECTOR,
+    SegmentDescriptor,
 };
 
 // Entry 0 must stay all-zero by CPU convention: loading it faults.
@@ -55,4 +56,6 @@ fn flat_limit_with_4k_granularity_spans_exactly_4gib() {
 fn selectors_pin_the_table_layout() {
     assert_eq!(KERNEL_CODE_SELECTOR, 0x08); // entry 1, ring 0
     assert_eq!(KERNEL_DATA_SELECTOR, 0x10); // entry 2, ring 0
+    assert_eq!(KERNEL_TSS_SELECTOR, 0x18); // entry 3 — kernel's own TSS (TR)
+    assert_eq!(KERNEL_DF_TSS_SELECTOR, 0x20); // entry 4 — double-fault task
 }

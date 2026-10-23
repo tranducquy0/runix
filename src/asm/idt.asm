@@ -73,11 +73,9 @@ isr7:
     push 7
     jmp isr_common_stub
 
-.global isr8
-isr8:
-    cli
-    push 8
-    jmp isr_common_stub
+# NOTE: there is deliberately no isr8 stub. Vector 8 (double fault) is
+# staged as a task gate whose target TSS lives in
+# subs/handlers/doublefault.rs — a hardware task switch, no stack frame.
 
 .global isr9
 isr9:

@@ -6,8 +6,9 @@
 //!    and parses the boot-info block for a memory map.
 //! 3. The kernel's own flat ring-0 GDT is installed and every segment
 //!    register is reloaded onto it, ending the dependency on GRUB's table.
-//! 4. The kernel TSS is registered at selector 0x18 and pointed at the boot
-//!    stack — groundwork for privilege-change stack switches.
+//! 4. Two TSSes are registered: the kernel's own at selector 0x18 (pointed
+//!    at the boot stack) and a dedicated double-fault task at selector 0x20,
+//!    entered through a task gate in IDT entry 8.
 //! 5. The PIC is remapped and the kernel's IDT is installed for CPU exception
 //!    handling (interrupts remain disabled for now).
 //! 6. Occupied spans (kernel image, boot-info block, boot stack) are reserved
@@ -31,6 +32,7 @@ mod drivers;
 // core subsystems
 mod subs;
 use subs::arch::gdt;
+use subs::arch::tss;
 use subs::boot::multiboot2::{
     self, BootInformation, Multiboot2Header, CHECKSUM, MULTIBOOT2_ARCHITECTURE_I386,
     MULTIBOOT2_HEADER_LENGTH, MULTIBOOT2_HEADER_MAGIC,
@@ -64,18 +66,25 @@ extern "C" fn kernel_main(multiboot_magic: u32, multiboot_info_addr: u32) -> ! {
 
     // Swap GDTR onto the kernel's own flat ring-0 table before anything else
     // can grow a dependency on the descriptors GRUB happened to leave loaded.
-    gdt::init();
+    // Both TSS descriptors (kernel + double-fault task) are written while
+    // building it; TR picks the kernel's (0x18), leaving the double-fault
+    // task "available" for the IDT's vector-8 gate below.
+    gdt::init(tss::address(), subs::handlers::doublefault::tss_address());
     println!(
         "installed kernel gdt: code = {:#x}, data = {:#x}",
         gdt::KERNEL_CODE_SELECTOR, gdt::KERNEL_DATA_SELECTOR
     );
+
+    // Fill the double-fault task's register file: eip/esp/segments so the
+    // first #DF lands a hardware task switch on the staged handler + stack.
+    subs::handlers::doublefault::init();
 
     // The TSS descriptor and `ltr` already happened inside `gdt::init`; this
     // call only aims esp0/ss0 at the boot stack, which is safe to do before
     // the IDT exists — interrupts are still off, so no privilege switch can
     // run against the zeroed defaults.
     let kernel_stack_top = core::ptr::addr_of!(boot_stack_top) as u32;
-    subs::arch::tss::set_kernel_stack(kernel_stack_top, gdt::KERNEL_DATA_SELECTOR);
+    tss::set_kernel_stack(kernel_stack_top, gdt::KERNEL_DATA_SELECTOR);
     println!(
         "installed kernel tss: selector = {:#x}, kernel stack = {:#x}",
         gdt::KERNEL_TSS_SELECTOR, kernel_stack_top
